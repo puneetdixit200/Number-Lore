@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Number Lore">
+  <defs>
+    <linearGradient id="field" x1="10" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#071014" />
+      <stop offset="1" stop-color="#05070a" />
+    </linearGradient>
+    <linearGradient id="mark" x1="15" y1="12" x2="50" y2="54" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e5ff5a" />
+      <stop offset="1" stop-color="#67e8f9" />
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.4" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#field)" />
+  <path d="M9 15h46M9 32h46M9 49h46M15 9v46M32 9v46M49 9v46" stroke="#67e8f9" stroke-opacity=".14" stroke-width="1" />
+  <circle cx="32" cy="32" r="23" fill="none" stroke="#e5ff5a" stroke-opacity=".35" stroke-width="1.5" />
+  <path d="M16 18h32v7H28v6h15v7H28v8h20v7H16v-7h5V25h-5z" fill="url(#mark)" filter="url(#glow)" />
+  <path d="M42 12l2.4 5.6L50 20l-5.6 2.4L42 28l-2.4-5.6L34 20l5.6-2.4z" fill="#ff4d6d" />
+</svg>

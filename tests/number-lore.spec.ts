@@ -37,6 +37,8 @@ test.beforeEach(async ({ page }) => {
 test("loads the hero and triggers a fact burst", async ({ page }) => {
   await page.goto("/");
 
+  await expect(page).toHaveTitle("Number Lore | Live Facts for Any Number");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/favicon.svg");
   await expect(page.getByLabel(/live unix timestamp/i)).toBeVisible();
   await page.getByLabel(/number input/i).fill("42");
   await page.getByRole("button", { name: /summon facts/i }).click();
