@@ -1,6 +1,15 @@
 # Number Lore
 
-Live timestamp in the center. Click a digit, type a number, or run one of the side modes. The app pulls math, trivia, and date facts from Numbers API, then throws them into animated cards with number rain.
+Date-first history interface. Type `5/18`, `7/20`, `2026-05-18`, or any other date and the app pulls stronger on-this-day facts into animated cards with number rain.
+
+![Number Lore date history interface](docs/screenshot.png)
+
+## What Changed
+
+- No fixed navbar; the opening screen is just the title, live date code, and search controls.
+- Result cards sit below the first viewport so the start screen stays focused.
+- Facts come from Wikimedia On This Day, HistoryLabs, Day in History, and ZenQuotes, with local fallbacks.
+- Provider text is cleaned before rendering so raw HTML and wiki math markup do not leak into cards.
 
 ## Run Locally
 
@@ -25,4 +34,4 @@ Use the default Vite settings:
 - Output directory: `dist`
 - Environment variables: none
 
-The app calls `https://numbersapi.com` from the browser. If that request fails, local fallback facts keep the interface working.
+The browser calls public date-history APIs directly. API Ninjas support is prepared as a URL builder only because live use requires your API key.

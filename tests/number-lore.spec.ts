@@ -48,6 +48,19 @@ test("loads the hero and triggers a date history burst", async ({ page }) => {
   await expect(page).toHaveTitle("Number Lore");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/favicon.svg");
   await expect(page.getByLabel(/live date code/i)).toBeVisible();
+  await expect(page.locator(".hero-topline")).toHaveCount(0);
+
+  const openingLayout = await page.evaluate(() => {
+    const workbench = document.querySelector(".workbench")?.getBoundingClientRect();
+
+    return {
+      workbenchTop: workbench?.top ?? 0,
+      viewportHeight: window.innerHeight,
+    };
+  });
+
+  expect(openingLayout.workbenchTop).toBeGreaterThan(openingLayout.viewportHeight + 48);
+
   await page.getByLabel(/date input/i).fill("5/18");
   await page.getByRole("button", { name: /summon history/i }).click();
 

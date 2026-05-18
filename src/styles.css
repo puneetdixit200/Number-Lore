@@ -132,50 +132,35 @@ img {
 
 .hero {
   display: flex;
-  min-height: 100dvh;
+  min-height: 100svh;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8rem 1rem 5rem;
+  padding: clamp(2.5rem, 6vh, 4.5rem) 1rem 8rem;
   text-align: center;
 }
 
-.hero-topline {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 2rem;
-  border-bottom: 1px solid var(--border);
-  background: rgba(8, 8, 16, 0.78);
-  backdrop-filter: blur(18px);
-}
-
-.brand-mark,
 .pulse-copy {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-}
-
-.brand-mark {
-  color: var(--text);
-  font-family: "Instrument Serif", Georgia, serif;
-  font-size: 1.35rem;
-}
-
-.brand-mark svg {
-  color: var(--primary);
-}
-
-.pulse-copy {
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0 0 0.8rem;
   color: var(--muted);
   font-size: 0.78rem;
+  text-align: center;
+}
+
+.hero-title {
+  max-width: 12ch;
+  margin: 0 0 1.35rem;
+  color: var(--text);
+  font-family: "Instrument Serif", Georgia, serif;
+  font-size: clamp(2.4rem, 5.2vw, 4.9rem);
+  font-style: italic;
+  font-weight: 400;
+  line-height: 0.92;
+  text-shadow: 0 0 36px rgba(232, 232, 248, 0.12);
 }
 
 .timestamp-label,
@@ -349,8 +334,8 @@ input:focus {
   display: grid;
   width: min(72rem, calc(100% - 2rem));
   grid-template-columns: minmax(16rem, 23rem) 1fr;
-  gap: 0.9rem;
-  margin: -4.5rem auto 5rem;
+  gap: 1.2rem;
+  margin: 8rem auto 5rem;
   align-items: start;
 }
 
@@ -469,13 +454,13 @@ meter {
 
 .fact-zone {
   min-height: 22rem;
-  padding: 0.9rem;
+  padding: 1.15rem;
   overflow: hidden;
 }
 
 .empty-deck {
   display: grid;
-  min-height: 19rem;
+  min-height: 21rem;
   place-items: center;
   margin: 0;
   color: var(--faint);
@@ -485,12 +470,12 @@ meter {
 .fact-deck {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(13.75rem, 1fr));
-  gap: 0.8rem;
+  gap: 1rem;
 }
 
 .fact-card {
   min-height: 11.5rem;
-  padding: 1rem;
+  padding: 1.15rem;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background:
@@ -808,14 +793,7 @@ meter {
 
 @media (max-width: 62rem) {
   .hero {
-    padding: 7rem 1rem 4rem;
-  }
-
-  .hero-topline {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.8rem 1rem;
+    padding: 3.25rem 1rem 7rem;
   }
 
   .digit {
@@ -832,7 +810,7 @@ meter {
   }
 
   .workbench {
-    margin-top: 1rem;
+    margin-top: 6rem;
   }
 
   .modes {
@@ -857,11 +835,11 @@ meter {
 
 @media (max-width: 38rem) {
   .pulse-copy {
-    display: none;
+    font-size: 0.72rem;
   }
 
   .hero {
-    min-height: 100dvh;
+    min-height: 100svh;
   }
 
   .digit {

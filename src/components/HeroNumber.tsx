@@ -1,4 +1,4 @@
-import { Hash, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { CSSProperties } from "react";
 import { splitDigits } from "../lib/numbers";
 
@@ -25,15 +25,9 @@ export function HeroNumber({
 
   return (
     <section className="hero" aria-labelledby="number-lore-title">
-      <div className="hero-topline">
-        <span className="brand-mark">
-          <Hash aria-hidden="true" size={18} />
-          Number Lore
-        </span>
-        <span className="pulse-copy">Dates only. Stranger history. Cleaner sources.</span>
-      </div>
+      <p className="pulse-copy">Dates only. Stranger history. Cleaner sources.</p>
 
-      <h1 id="number-lore-title" className="sr-only">
+      <h1 id="number-lore-title" className="hero-title">
         Number Lore
       </h1>
 
