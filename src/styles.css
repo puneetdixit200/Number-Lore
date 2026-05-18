@@ -388,6 +388,11 @@ meter {
   color: #ffb86b;
 }
 
+.badge-lore {
+  background: rgba(167, 139, 250, 0.2);
+  color: #c4b5fd;
+}
+
 .badge-daily {
   background: rgba(167, 139, 250, 0.2);
   color: #c4b5fd;

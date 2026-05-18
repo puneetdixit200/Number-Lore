@@ -1,7 +1,7 @@
 import type { BirthdayNumber } from "../lib/numbers";
 import { sanitizeNumberInput } from "../lib/numbers";
 
-export type FactType = "math" | "trivia" | "date" | "daily" | "birthday" | "battle";
+export type FactType = "math" | "trivia" | "date" | "lore" | "daily" | "birthday" | "battle";
 export type FactSource = "curated" | "computed" | "numbersapi" | "wikipedia" | "wikimedia" | "byabbe" | "fallback";
 
 export interface FactCard {
@@ -20,6 +20,7 @@ export type NumbersApiRequest =
   | { kind: "date"; month: number; day: number };
 
 const API_ROOT = "https://numbersapi.com";
+const WIKIPEDIA_ACTION_API_ROOT = "https://en.wikipedia.org/w/api.php";
 const WIKIPEDIA_SUMMARY_ROOT = "https://en.wikipedia.org/api/rest_v1/page/summary";
 const WIKIMEDIA_ON_THIS_DAY_ROOT = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events";
 const BYABBE_ON_THIS_DAY_ROOT = "https://byabbe.se/on-this-day";
@@ -35,6 +36,21 @@ export function buildNumbersApiUrl(request: NumbersApiRequest): string {
 
 export function buildWikipediaSummaryUrl(title: string): string {
   return `${WIKIPEDIA_SUMMARY_ROOT}/${title.trim().replace(/\s+/g, "_")}`;
+}
+
+export function buildWikipediaSearchUrl(search: string, limit = 6): string {
+  const params = new URLSearchParams({
+    origin: "*",
+    action: "query",
+    format: "json",
+    list: "search",
+    srnamespace: "0",
+    srlimit: String(limit),
+    srprop: "snippet",
+    srsearch: search,
+  });
+
+  return `${WIKIPEDIA_ACTION_API_ROOT}?${params}`;
 }
 
 export function buildWikimediaOnThisDayUrl(month: number, day: number): string {
@@ -78,15 +94,17 @@ export function isInterestingProviderText(text: string, number: string | number)
   return true;
 }
 
-export async function fetchFactBurst(number: string | number, date = new Date()): Promise<FactCard[]> {
+export async function fetchFactBurst(number: string | number, _date = new Date()): Promise<FactCard[]> {
   const numberText = normalizeNumber(number);
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
+  const encodedDate = deriveDateFromNumber(numberText);
+  const contextCard = encodedDate
+    ? fetchDateCard(encodedDate.month, encodedDate.day, 2)
+    : fetchLoreCard(numberText, 2);
 
   return Promise.all([
     fetchFactCard({ kind: "math", number: numberText }, "math", numberText, 0),
     fetchFactCard({ kind: "trivia", number: numberText }, "trivia", numberText, 1),
-    fetchFactCard({ kind: "date", month, day }, "date", `${month}/${day}`, 2),
+    contextCard,
   ]);
 }
 
@@ -146,6 +164,7 @@ export function createFallbackFact(type: FactType, number: string | number, labe
     math: `${numberText} has ${digitCount} digit${digitCount === 1 ? "" : "s"} and a digit sum of ${digitSum}.`,
     trivia: `${numberText} is off the wire, so the local read is blunt: ${digitCount} digits, sum ${digitSum}.`,
     date: `${numberText} did not answer. The fallback marker stays on the calendar anyway.`,
+    lore: `${numberText} has no clean story on the wire. Its digits still add to ${digitSum}.`,
     daily: `Daily number ${numberText}: ${digitCount} digits, digit sum ${digitSum}, no permission requested.`,
     birthday: `${label}: ${numberText}. Digit sum ${digitSum}; keep the receipt.`,
     battle: `${numberText} brings ${digitCount} digits and ${digitSum} points of raw digit weight.`,
@@ -165,6 +184,24 @@ async function fetchFactCard(
     return createCard(type, number, fact.text, fact.source, index);
   } catch {
     return createFallbackFact(type, number, "number", index);
+  }
+}
+
+async function fetchDateCard(month: number, day: number, index: number): Promise<FactCard> {
+  try {
+    const fact = await fetchDateFact(month, day);
+    return createCard("date", `${month}/${day}`, fact.text, fact.source, index);
+  } catch {
+    return createFallbackFact("date", `${month}/${day}`, "date", index);
+  }
+}
+
+async function fetchLoreCard(number: string, index: number): Promise<FactCard> {
+  try {
+    const fact = await fetchNumberLoreFact(number);
+    return createCard("lore", number, fact.text, fact.source, index);
+  } catch {
+    return createFallbackFact("lore", number, "number", index);
   }
 }
 
@@ -188,6 +225,27 @@ async function fetchNumberFact(type: "math" | "trivia" | "battle" | FactType, nu
   providers.push(async () => ({ source: "numbersapi", text: await fetchText(buildNumbersApiUrl({ kind, number })) }));
 
   return fetchFirstLiveFact(providers);
+}
+
+async function fetchNumberLoreFact(number: string): Promise<LiveFact> {
+  const localFact = getCuratedNumberFact("lore", number) ?? getComputedLoreFact(number, false);
+
+  if (localFact) {
+    return localFact;
+  }
+
+  return fetchFirstLiveFact([
+    async () => ({ source: "wikipedia", text: await fetchWikipediaNumberLore(number) }),
+    async () => {
+      const fact = getComputedLoreFact(number, true);
+
+      if (!fact) {
+        throw new Error("no computed lore");
+      }
+
+      return fact;
+    },
+  ]);
 }
 
 async function fetchDateFact(month: number, day: number): Promise<LiveFact> {
@@ -241,6 +299,40 @@ async function fetchWikipediaSummary(title: string): Promise<string> {
   return extract;
 }
 
+async function fetchWikipediaNumberLore(number: string): Promise<string> {
+  const queries = buildNumberLoreSearchQueries(number);
+  const triedTitles = new Set<string>();
+
+  for (const query of queries) {
+    const results = await fetchWikipediaSearch(query);
+    const result = selectBestWikipediaLoreResult(results, number, query);
+
+    if (!result || triedTitles.has(result.title)) {
+      continue;
+    }
+
+    triedTitles.add(result.title);
+
+    try {
+      const summary = await fetchWikipediaSummary(result.title);
+      return formatWikipediaLore(result.title, summary, number);
+    } catch {
+      const snippet = stripHtml(result.snippet).trim();
+
+      if (isInterestingProviderText(snippet, number)) {
+        return formatWikipediaLore(result.title, snippet, number);
+      }
+    }
+  }
+
+  throw new Error("Wikipedia search did not find usable number lore");
+}
+
+async function fetchWikipediaSearch(search: string): Promise<WikipediaSearchResult[]> {
+  const data = await fetchJson<WikipediaSearchResponse>(buildWikipediaSearchUrl(search));
+  return data.query?.search ?? [];
+}
+
 async function fetchWikimediaOnThisDay(month: number, day: number): Promise<string> {
   const data = await fetchJson<WikimediaOnThisDay>(buildWikimediaOnThisDayUrl(month, day));
   const event = selectBestHistoricalEvent(data.events, (item) => item.text, (item) => item.year);
@@ -288,7 +380,7 @@ function createCard(type: FactType, number: string, text: string, source: FactSo
   };
 }
 
-function getCuratedNumberFact(kind: "math" | "trivia", number: string): LiveFact | null {
+function getCuratedNumberFact(kind: "math" | "trivia" | "lore", number: string): LiveFact | null {
   const facts = CURATED_NUMBER_FACTS[number];
   const text = facts?.[kind];
 
@@ -308,6 +400,18 @@ function getComputedNumberFact(kind: "math" | "trivia", number: string): LiveFac
   return text ? { source: "computed", text } : null;
 }
 
+function getComputedLoreFact(number: string, allowFiller: boolean): LiveFact | null {
+  const value = Number(number);
+
+  if (!Number.isSafeInteger(value) || value < 0 || value > COMPUTABLE_INTEGER_LIMIT) {
+    return null;
+  }
+
+  const text = buildComputedLore(value, allowFiller);
+
+  return text ? { source: "computed", text } : null;
+}
+
 function buildComputedInsights(value: number): string[] {
   const insights: string[] = [];
   const digits = String(value);
@@ -316,6 +420,19 @@ function buildComputedInsights(value: number): string[] {
   const timestampInsights = buildUnixTimestampInsights(value);
 
   insights.push(...timestampInsights);
+
+  if (isPrime(value) && value > 12) {
+    if (isPowerOfTwo(value + 1)) {
+      const exponent = Math.log2(value + 1);
+      insights.push(`${value} is a Mersenne prime: 2^${exponent} - 1. In binary, it is a clean run of ${exponent} ones.`);
+    } else {
+      insights.push(`${value} is prime. Trial division reaches its square root without finding a clean split.`);
+    }
+
+    const previous = findPreviousPrime(value);
+    const next = findNextPrime(value);
+    insights.push(`${value}'s prime neighbors are ${previous} and ${next}; the gaps are ${value - previous} and ${next - value}.`);
+  }
 
   if (Number.isInteger(squareRoot) && value > 1) {
     insights.push(`${value} is a square: ${squareRoot} x ${squareRoot}. That gives it a grid you can actually draw.`);
@@ -363,6 +480,33 @@ function buildComputedInsights(value: number): string[] {
   return insights.slice(0, 2);
 }
 
+function buildComputedLore(value: number, allowFiller: boolean): string | null {
+  const digits = String(value);
+  const digitSum = sumDigits(value);
+  const digitalRoot = digitSum === 0 ? 0 : 1 + ((digitSum - 1) % 9);
+
+  if (digits.length > 1 && digits === [...digits].reverse().join("")) {
+    return `${value} is a palindrome, so it reads the same after a mirror flip of the digit order.`;
+  }
+
+  if (isPrime(value) && value > 12) {
+    if (isPowerOfTwo(value + 1)) {
+      const exponent = Math.log2(value + 1);
+      return `${value} belongs to the Mersenne prime line, numbers shaped as 2^p - 1; here p is ${exponent}.`;
+    }
+
+    const previous = findPreviousPrime(value);
+    const next = findNextPrime(value);
+    return `${value} sits between prime neighbors ${previous} and ${next}; the gaps are ${value - previous} and ${next - value}.`;
+  }
+
+  if (allowFiller && value > 12) {
+    return `${value} collapses to digital root ${digitalRoot}. Keep summing its digits and that single digit survives.`;
+  }
+
+  return null;
+}
+
 function buildUnixTimestampInsights(value: number): string[] {
   const date = new Date(value * 1000);
   const year = date.getUTCFullYear();
@@ -401,6 +545,34 @@ function hasRepeatedDigitRun(value: string): boolean {
   return /(\d)\1{1,}/.test(value);
 }
 
+function isPrime(value: number): boolean {
+  if (!Number.isInteger(value) || value < 2) {
+    return false;
+  }
+
+  if (value === 2) {
+    return true;
+  }
+
+  if (value % 2 === 0) {
+    return false;
+  }
+
+  const limit = Math.floor(Math.sqrt(value));
+
+  for (let divisor = 3; divisor <= limit; divisor += 2) {
+    if (value % divisor === 0) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isPowerOfTwo(value: number): boolean {
+  return Number.isInteger(value) && value > 0 && Number.isInteger(Math.log2(value));
+}
+
 function findSmallestDivisor(value: number): number | null {
   if (value < 2) {
     return null;
@@ -419,6 +591,147 @@ function findSmallestDivisor(value: number): number | null {
   }
 
   return null;
+}
+
+function findPreviousPrime(value: number): number {
+  for (let candidate = value - 1; candidate >= 2; candidate -= 1) {
+    if (isPrime(candidate)) {
+      return candidate;
+    }
+  }
+
+  return 2;
+}
+
+function findNextPrime(value: number): number {
+  for (let candidate = value + 1; candidate <= value + 10_000; candidate += 1) {
+    if (isPrime(candidate)) {
+      return candidate;
+    }
+  }
+
+  return value;
+}
+
+function buildNumberLoreSearchQueries(number: string): string[] {
+  return [`${number} (number)`, `${number} math prime`, `${number}-year`, `${number}-sided`, `${number} number history`];
+}
+
+function selectBestWikipediaLoreResult(
+  results: WikipediaSearchResult[],
+  number: string,
+  query: string,
+): WikipediaSearchResult | null {
+  const scored = results
+    .map((result, index) => ({
+      result,
+      index,
+      score: scoreWikipediaLoreResult(result, number, query),
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+
+  return scored[0]?.result ?? null;
+}
+
+function scoreWikipediaLoreResult(result: WikipediaSearchResult, number: string, query: string): number {
+  const title = result.title.toLowerCase();
+  const snippet = stripHtml(result.snippet).toLowerCase();
+  const lowerNumber = number.toLowerCase();
+  const haystack = `${title} ${snippet}`;
+  let score = 0;
+
+  if (GENERIC_WIKIPEDIA_TITLES.some((genericTitle) => title === genericTitle || title.startsWith(`${genericTitle} `))) {
+    return -20;
+  }
+
+  if (/^(ad|bc|bce|ce) \d+$/.test(title)) {
+    return -20;
+  }
+
+  if (title === `${lowerNumber} (number)`) {
+    score += 26;
+  }
+
+  if (haystack.includes(`${lowerNumber}-year`) || haystack.includes(`${lowerNumber} year`)) {
+    score += query.includes("-year") ? 24 : 14;
+  }
+
+  if (haystack.includes(`${lowerNumber}-sided`) || haystack.includes(`${lowerNumber} sided`)) {
+    score += query.includes("-sided") ? 24 : 14;
+  }
+
+  if (haystack.includes(lowerNumber)) {
+    score += 8;
+  }
+
+  if (/\b(cicada|mersenne|fermat|polygon|polyhedron|prime|atomic number|constellation|calendar|cycle)\b/.test(haystack)) {
+    score += 12;
+  }
+
+  if (/\b(disambiguation|list of|index of|surname)\b/.test(title)) {
+    score -= 18;
+  }
+
+  if (/\b(killing|murder|victim|crime|dismember|shooting|rape|terror|suspect)\b/.test(haystack)) {
+    score -= 40;
+  }
+
+  if (/\b\d+-year-old\b/.test(haystack)) {
+    score -= 34;
+  }
+
+  if (/\bfollowing\b|\bpreceding\b/.test(snippet)) {
+    score -= 8;
+  }
+
+  return score;
+}
+
+function formatWikipediaLore(title: string, text: string, number: string): string {
+  const summary = shortenText(text);
+  const numberTitle = `${number} (number)`;
+
+  return title === numberTitle ? summary : `${title}: ${summary}`;
+}
+
+function shortenText(text: string, limit = 230): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  const sentences = clean.split(/(?<=[.!?])\s+/).filter(Boolean);
+  const summary = sentences.slice(0, 2).join(" ") || clean;
+
+  if (summary.length <= limit) {
+    return summary;
+  }
+
+  return `${summary.slice(0, limit).replace(/\s+\S*$/, "")}.`;
+}
+
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]*>/g, "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
+}
+
+function deriveDateFromNumber(number: string): { month: number; day: number } | null {
+  const digits = number.replace(/\D/g, "");
+
+  if (digits.length === 3) {
+    const month = Number(digits.slice(0, 1));
+    const day = Number(digits.slice(1));
+    return isValidMonthDay(month, day) ? { month, day } : null;
+  }
+
+  if (digits.length === 4) {
+    const month = Number(digits.slice(0, 2));
+    const day = Number(digits.slice(2));
+    return isValidMonthDay(month, day) ? { month, day } : null;
+  }
+
+  return null;
+}
+
+function isValidMonthDay(month: number, day: number): boolean {
+  const monthLengths = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return Number.isInteger(month) && Number.isInteger(day) && month >= 1 && month <= 12 && day >= 1 && day <= monthLengths[month - 1];
 }
 
 function selectBestHistoricalEvent<T>(
@@ -538,6 +851,17 @@ interface WikipediaSummary {
   extract?: string;
 }
 
+interface WikipediaSearchResponse {
+  query?: {
+    search?: WikipediaSearchResult[];
+  };
+}
+
+interface WikipediaSearchResult {
+  title: string;
+  snippet: string;
+}
+
 interface WikimediaOnThisDay {
   events?: Array<{
     year: number | string;
@@ -552,7 +876,15 @@ interface ByabbeOnThisDay {
   }>;
 }
 
-const CURATED_NUMBER_FACTS: Record<string, Partial<Record<"math" | "trivia", string>>> = {
+const GENERIC_WIKIPEDIA_TITLES = [
+  "number",
+  "mathematics",
+  "history of mathematics",
+  "timeline of mathematics",
+  "year",
+];
+
+const CURATED_NUMBER_FACTS: Record<string, Partial<Record<"math" | "trivia" | "lore", string>>> = {
   "0": {
     math: "0 does something no counting number can do: it turns absence into a place you can calculate from.",
     trivia: "Babylonian scribes left gaps before zero got its own mark. The blank space became a character.",
@@ -609,6 +941,11 @@ const CURATED_NUMBER_FACTS: Record<string, Partial<Record<"math" | "trivia", str
     math: "13 is prime, but it also starts a Fibonacci-adjacent run where superstition keeps doing the marketing.",
     trivia: "Buildings skip the 13th floor more often than math skips 13. The number did nothing wrong.",
   },
+  "17": {
+    math: "17 is a Fermat prime: 2^(2^2) + 1. That makes a regular 17-gon constructible with compass and straightedge.",
+    trivia: "In Italy, 17 carries bad luck because XVII can be rearranged into VIXI, Latin for 'I have lived.'",
+    lore: "Periodical cicadas use 13- and 17-year cycles, flooding predators with more insects than they can eat.",
+  },
   "23": {
     math: "23 is prime and sits inside the birthday paradox: 23 people already gives a better-than-even birthday match.",
     trivia: "23 became conspiracy bait because humans are excellent at finding patterns after the fact.",
@@ -616,6 +953,7 @@ const CURATED_NUMBER_FACTS: Record<string, Partial<Record<"math" | "trivia", str
   "42": {
     math: "42 is pronic: 6 x 7. It is also the third primary pseudoperfect number, which is a better party trick.",
     trivia: "Douglas Adams picked 42 because it sounded flat, specific, and useless. That made the joke indestructible.",
+    lore: "ASCII assigns 42 to the asterisk, the little wildcard that tells old tools to match almost anything.",
   },
   "69": {
     math: "69 is semiprime: 3 x 23. It looks loud, but its factorization is almost boring.",

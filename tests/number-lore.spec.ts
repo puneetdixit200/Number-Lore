@@ -43,7 +43,9 @@ test("loads the hero and triggers a fact burst", async ({ page }) => {
 
   await expect(page.getByText("math")).toBeVisible();
   await expect(page.getByText(/42 is pronic/i)).toBeVisible();
-  await expect(page.getByText("picked", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("lore", { exact: true })).toBeVisible();
+  await expect(page.getByText(/asterisk/i)).toBeVisible();
+  await expect(page.getByText("picked", { exact: true })).toHaveCount(3);
   await expect(page.getByRole("link", { name: /github/i })).toBeVisible();
 });
 

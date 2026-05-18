@@ -46,7 +46,9 @@ describe("Number Lore app", () => {
 
     expect(await screen.findByText("math")).toBeInTheDocument();
     expect(screen.getByText(/42 is pronic/i)).toBeInTheDocument();
-    expect(screen.getAllByText("picked")).toHaveLength(2);
+    expect(screen.getByText("lore")).toBeInTheDocument();
+    expect(screen.getByText(/asterisk/i)).toBeInTheDocument();
+    expect(screen.getAllByText("picked")).toHaveLength(3);
   });
 
   it("does not reuse card keys across repeated bursts", async () => {
@@ -84,11 +86,11 @@ describe("Number Lore app", () => {
 
     render(<App />);
     await user.clear(screen.getByLabelText(/number input/i));
-    await user.type(screen.getByLabelText(/number input/i), "13");
+    await user.type(screen.getByLabelText(/number input/i), "987654321098");
     await user.click(screen.getByRole("button", { name: /summon facts/i }));
 
     expect((await screen.findAllByText("fallback")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/13/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/987654321098/).length).toBeGreaterThan(0);
   });
 
   it("validates birthday mode before decoding", async () => {

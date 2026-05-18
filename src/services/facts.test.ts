@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildByabbeOnThisDayUrl,
   buildNumbersApiUrl,
+  buildWikipediaSearchUrl,
   buildWikimediaOnThisDayUrl,
   buildWikipediaSummaryUrl,
   createFallbackFact,
@@ -30,6 +31,9 @@ describe("facts service", () => {
       "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events/05/08",
     );
     expect(buildByabbeOnThisDayUrl(5, 8)).toBe("https://byabbe.se/on-this-day/5/8/events.json");
+    expect(buildWikipediaSearchUrl("17-year")).toBe(
+      "https://en.wikipedia.org/w/api.php?origin=*&action=query&format=json&list=search&srnamespace=0&srlimit=6&srprop=snippet&srsearch=17-year",
+    );
   });
 
   it("uses live providers when local systems do not cover a number", async () => {
@@ -50,8 +54,17 @@ describe("facts service", () => {
         });
       }
 
-      if (href.includes("api.wikimedia.org")) {
-        return Response.json({ events: [{ year: 1970, text: "May 18 is a date with receipts." }] });
+      if (href.includes("w/api.php")) {
+        return Response.json({
+          query: {
+            search: [
+              {
+                title: "987654321098 (number)",
+                snippet: "987654321098 has a search-backed story instead of a calendar detour.",
+              },
+            ],
+          },
+        });
       }
 
       throw new Error(`unexpected url ${href}`);
@@ -61,8 +74,8 @@ describe("facts service", () => {
     const cards = await fetchFactBurst(987_654_321_098, new Date("2026-05-18T12:00:00"));
 
     expect(cards).toHaveLength(3);
-    expect(cards.map((card) => card.type)).toEqual(["math", "trivia", "date"]);
-    expect(cards.map((card) => card.source)).toEqual(["wikipedia", "wikipedia", "wikimedia"]);
+    expect(cards.map((card) => card.type)).toEqual(["math", "trivia", "lore"]);
+    expect(cards.map((card) => card.source)).toEqual(["wikipedia", "wikipedia", "wikipedia"]);
     expect(fetchMock).not.toHaveBeenCalledWith("https://numbersapi.com/987654321098/math");
   });
 
@@ -122,6 +135,134 @@ describe("facts service", () => {
     expect(cards[1].text).toMatch(/luck|ritual|dice/i);
   });
 
+  it("does not attach today's date to ordinary numbers", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("api.wikimedia.org") || href.includes("byabbe.se")) {
+        throw new Error(`ordinary number burst should not fetch today's date: ${href}`);
+      }
+
+      throw new Error(`unexpected provider for curated 17: ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(17, new Date("2026-05-18T12:00:00"));
+
+    expect(cards.map((card) => card.type)).toEqual(["math", "trivia", "lore"]);
+    expect(cards.map((card) => card.number)).toEqual(["17", "17", "17"]);
+    expect(cards.map((card) => card.source)).toEqual(["curated", "curated", "curated"]);
+    expect(cards.map((card) => card.text).join(" ")).not.toMatch(/5\/18|May 18/i);
+    expect(cards[2].text).toMatch(/cicadas|17-year|prime/i);
+  });
+
+  it("uses a date card only when the input encodes a date", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("api.wikimedia.org")) {
+        return Response.json({
+          events: [{ year: 2005, text: "Hubble confirms two additional moons around Pluto." }],
+        });
+      }
+
+      throw new Error(`unexpected url ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(518, new Date("2026-01-01T12:00:00"));
+
+    expect(cards[2].type).toBe("date");
+    expect(cards[2].number).toBe("5/18");
+    expect(cards[2].text).toMatch(/Hubble|Pluto/i);
+  });
+
+  it("searches Wikipedia for number lore before using computed filler", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("w/api.php") && href.includes("46+%28number%29")) {
+        return Response.json({
+          query: {
+            search: [
+              {
+                title: "Forty-six",
+                snippet: "46 has a cultural trail through music, sports, and old numbering systems.",
+              },
+            ],
+          },
+        });
+      }
+
+      if (href.includes("Forty-six")) {
+        return Response.json({
+          extract:
+            "Forty-six has a cultural trail through music, sports, and old numbering systems.",
+        });
+      }
+
+      if (href.includes("w/api.php")) {
+        return Response.json({ query: { search: [] } });
+      }
+
+      throw new Error(`unexpected url ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(46, new Date("2026-05-18T12:00:00"));
+
+    expect(cards[2].type).toBe("lore");
+    expect(cards[2].source).toBe("wikipedia");
+    expect(cards[2].number).toBe("46");
+    expect(cards[2].text).toMatch(/cultural trail|numbering systems/i);
+  });
+
+  it("rejects age and crime search noise for number lore", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("w/api.php") && href.includes("46+%28number%29")) {
+        return Response.json({ query: { search: [] } });
+      }
+
+      if (href.includes("w/api.php") && href.includes("46+math+prime")) {
+        return Response.json({
+          query: {
+            search: [
+              {
+                title: "Killing of Someone",
+                snippet: "The case involved a 46-year-old suspect and a crime scene.",
+              },
+              {
+                title: "Forty-six",
+                snippet: "46 has a cultural trail through music, sports, and old numbering systems.",
+              },
+            ],
+          },
+        });
+      }
+
+      if (href.includes("Forty-six")) {
+        return Response.json({
+          extract:
+            "Forty-six has a cultural trail through music, sports, and old numbering systems.",
+        });
+      }
+
+      if (href.includes("w/api.php")) {
+        return Response.json({ query: { search: [] } });
+      }
+
+      throw new Error(`unexpected url ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(46, new Date("2026-05-18T12:00:00"));
+
+    expect(cards[2].text).toMatch(/cultural trail|numbering systems/i);
+    expect(cards[2].text).not.toMatch(/killing|crime|46-year-old/i);
+  });
+
   it("computes interesting facts for ordinary numbers before using dull provider text", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
@@ -144,6 +285,18 @@ describe("facts service", () => {
     expect(cards[1].source).toBe("computed");
     expect(cards[0].text).toMatch(/11 x 11|square/i);
     expect(cards[1].text).toMatch(/palindrome|mirror/i);
+  });
+
+  it("uses prime structure instead of bit and hex trivia", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+
+    const cards = await fetchFactBurst(19, new Date("2026-05-18T12:00:00"));
+
+    expect(cards[0].source).toBe("computed");
+    expect(cards[1].source).toBe("computed");
+    expect(cards[0].text).toMatch(/prime/i);
+    expect(cards[1].text).toMatch(/prime neighbors|gap/i);
+    expect(cards[1].text).not.toMatch(/bits|hex/i);
   });
 
   it("turns Unix timestamps into computed facts instead of provider fallback", async () => {
@@ -179,11 +332,11 @@ describe("facts service", () => {
   it("returns fallback cards when fetch fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
-    const cards = await fetchFactBurst(13, new Date("2026-05-18T12:00:00"));
+    const cards = await fetchFactBurst(987_654_321_098, new Date("2026-05-18T12:00:00"));
 
     expect(cards).toHaveLength(3);
     expect(cards.some((card) => card.source === "fallback")).toBe(true);
-    expect(cards[0].text).toMatch(/13/);
+    expect(cards[0].text).toMatch(/987654321098/);
   });
 
   it("uses curated facts before live APIs for known numbers", async () => {
@@ -212,9 +365,9 @@ describe("facts service", () => {
 
     const cards = await fetchFactBurst(42, new Date("2026-05-08T12:00:00"));
 
-    expect(cards.map((card) => card.source)).toEqual(["curated", "curated", "wikimedia"]);
+    expect(cards.map((card) => card.source)).toEqual(["curated", "curated", "curated"]);
     expect(cards[0].text).toMatch(/pronic|pseudoperfect/i);
-    expect(cards[2].text).toMatch(/1970/);
+    expect(cards[2].text).toMatch(/ASCII|asterisk/i);
   });
 
   it("chooses stronger date events instead of the newest feed item", async () => {
@@ -244,7 +397,7 @@ describe("facts service", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const cards = await fetchFactBurst(42, new Date("2026-05-18T12:00:00"));
+    const cards = await fetchFactBurst(518, new Date("2026-05-18T12:00:00"));
 
     expect(cards[2].text).not.toMatch(/presidential campaign/i);
     expect(cards[2].text).toMatch(/Hubble|Pluto|Mount St\. Helens/i);
@@ -296,7 +449,7 @@ describe("facts service", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const cards = await fetchFactBurst(9, new Date("2026-05-08T12:00:00"));
+    const cards = await fetchFactBurst(508, new Date("2026-01-01T12:00:00"));
 
     expect(cards[2].source).toBe("byabbe");
     expect(cards[2].text).toMatch(/332/);
