@@ -25,8 +25,6 @@ import {
 } from "./services/facts";
 import "./styles.css";
 
-const MAX_CARDS = 18;
-
 export default function App() {
   const [timestamp, setTimestamp] = useState(() => getUnixTimestamp());
   const [inputValue, setInputValue] = useState(() => String(getUnixTimestamp()));
@@ -65,7 +63,7 @@ export default function App() {
       id: `${card.id}-burst-${burstIdRef.current}-${index}`,
     }));
 
-    setCards((current) => [...burstCards, ...current].slice(0, MAX_CARDS));
+    setCards(burstCards);
     releaseRain(String(number));
   }
 

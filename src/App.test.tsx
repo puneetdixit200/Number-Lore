@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -51,6 +51,28 @@ describe("Number Lore app", () => {
     expect(screen.getAllByText("picked")).toHaveLength(3);
   });
 
+  it("replaces cards from the previous search", async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.clear(screen.getByLabelText(/number input/i));
+    await user.type(screen.getByLabelText(/number input/i), "17");
+    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+
+    const factZone = screen.getByLabelText(/fact cards/i);
+    expect(await within(factZone).findByText(/Fermat prime/i)).toBeInTheDocument();
+    expect(within(factZone).getByText(/cicadas/i)).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText(/number input/i));
+    await user.type(screen.getByLabelText(/number input/i), "42");
+    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+
+    expect(await within(factZone).findByText(/42 is pronic/i)).toBeInTheDocument();
+    expect(within(factZone).queryByText(/Fermat prime/i)).not.toBeInTheDocument();
+    expect(within(factZone).queryByText(/cicadas/i)).not.toBeInTheDocument();
+  });
+
   it("does not reuse card keys across repeated bursts", async () => {
     const user = userEvent.setup();
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -73,7 +95,7 @@ describe("Number Lore app", () => {
 
     await user.click(screen.getByRole("button", { name: /summon facts/i }));
     await waitFor(() => {
-      expect(screen.getAllByText(/42 is pronic/i)).toHaveLength(2);
+      expect(screen.getAllByText(/42 is pronic/i)).toHaveLength(1);
     });
 
     expect(errorSpy.mock.calls.flat().join(" ")).not.toMatch(/same key/i);
