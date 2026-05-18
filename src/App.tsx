@@ -7,8 +7,9 @@ import { Timeline } from "./components/Timeline";
 import {
   createRainParticles,
   extractBirthdayNumbers,
-  getDailyNumber,
-  getUnixTimestamp,
+  formatDateInput,
+  getDateCode,
+  sanitizeDateInput,
   sanitizeNumberInput,
   scoreBattle,
   type BattleResult,
@@ -19,38 +20,37 @@ import {
   fetchBattleFacts,
   fetchDailyFacts,
   fetchFactBurst,
-  fetchFactsForBirthday,
   type FactCard,
 } from "./services/facts";
 import "./styles.css";
 
 export default function App() {
-  const [timestamp, setTimestamp] = useState(() => getUnixTimestamp());
-  const [inputValue, setInputValue] = useState(() => String(getUnixTimestamp()));
+  const [timestamp, setTimestamp] = useState(() => getDateCode());
+  const [inputValue, setInputValue] = useState(() => formatDateInput());
   const [inputTouched, setInputTouched] = useState(false);
   const [cards, setCards] = useState<FactCard[]>([]);
   const [particles, setParticles] = useState<RainParticle[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeMode, setActiveMode] = useState<Mode>("daily");
-  const [battleLeft, setBattleLeft] = useState("42");
-  const [battleRight, setBattleRight] = useState("7");
+  const [battleLeft, setBattleLeft] = useState("1969");
+  const [battleRight, setBattleRight] = useState("1980");
   const [battleResult, setBattleResult] = useState<BattleResult | null>(null);
   const [birthdayDate, setBirthdayDate] = useState("");
   const [birthdayTime, setBirthdayTime] = useState("");
   const [birthdayStatus, setBirthdayStatus] = useState("");
   const burstIdRef = useRef(0);
 
-  const dailyNumber = useMemo(() => getDailyNumber(), []);
+  const dailyNumber = useMemo(() => formatDateInput(), []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      const nextTimestamp = getUnixTimestamp();
+      const nextTimestamp = getDateCode();
       setTimestamp(nextTimestamp);
 
       if (!inputTouched) {
-        setInputValue(String(nextTimestamp));
+        setInputValue(formatDateInput());
       }
-    }, 1000);
+    }, 60_000);
 
     return () => window.clearInterval(interval);
   }, [inputTouched]);
@@ -71,21 +71,21 @@ export default function App() {
     window.setTimeout(() => setParticles([]), 5200);
   }
 
-  async function runBurst(rawNumber = inputValue) {
-    const number = sanitizeNumberInput(rawNumber) || String(timestamp);
-    setInputValue(number);
+  async function runBurst(rawDate = inputValue) {
+    const dateValue = sanitizeDateInput(rawDate) || formatDateInput();
+    setInputValue(dateValue);
     setInputTouched(true);
     setLoading(true);
 
     try {
-      setIncomingCards(await fetchFactBurst(number), number);
+      setIncomingCards(await fetchFactBurst(dateValue), dateValue);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleDigitClick(digit: string) {
-    await runBurst(digit);
+  async function handleDigitClick() {
+    await runBurst(inputValue);
   }
 
   async function handleDaily() {
@@ -126,10 +126,10 @@ export default function App() {
     setBirthdayStatus("");
 
     try {
-      const birthdayNumbers = extractBirthdayNumbers(birthdayDate, birthdayTime);
+      extractBirthdayNumbers(birthdayDate, birthdayTime);
       setLoading(true);
-      setIncomingCards(await fetchFactsForBirthday(birthdayNumbers), birthdayNumbers.map((entry) => entry.value).join(""));
-      setBirthdayStatus("birth code decoded");
+      setIncomingCards(await fetchFactBurst(birthdayDate), birthdayDate);
+      setBirthdayStatus("birth date decoded");
     } catch (error) {
       setBirthdayStatus(error instanceof Error ? error.message : "birthday could not be decoded");
     } finally {
@@ -147,7 +147,7 @@ export default function App() {
         loading={loading}
         onInputChange={(value) => {
           setInputTouched(true);
-          setInputValue(sanitizeNumberInput(value));
+          setInputValue(sanitizeDateInput(value));
         }}
         onDigitClick={handleDigitClick}
         onQuickPick={(number) => void runBurst(String(number))}
@@ -177,7 +177,7 @@ export default function App() {
       </div>
       <Timeline />
       <footer className="site-footer">
-        <p>Number data from curated reads, Wikipedia, Open Trivia DB, Numbers API, and f-api history.</p>
+        <p>Date history from Wikimedia, HistoryLabs, Day in History, ZenQuotes, and optional API Ninjas.</p>
       </footer>
       <a
         aria-label="GitHub profile for Puneet Dixit"

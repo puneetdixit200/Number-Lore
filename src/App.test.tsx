@@ -8,141 +8,160 @@ describe("Number Lore app", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the live timestamp as interactive digits", () => {
+  it("renders the live date code as interactive digits", () => {
     render(<App />);
 
-    expect(screen.getByLabelText(/live unix timestamp/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /inspect digit/i }).length).toBeGreaterThan(5);
-    expect(screen.getByRole("link", { name: /github/i })).toHaveAttribute(
-      "href",
-      "https://github.com/puneetdixit200",
-    );
+    expect(screen.getByLabelText(/live date code/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/date input/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /inspect digit/i }).length).toBeGreaterThan(2);
+    expect(screen.getByRole("link", { name: /github/i })).toHaveAttribute("href", "https://github.com/puneetdixit200");
     expect(screen.getByText("PUNEET DIXIT")).toBeInTheDocument();
   });
 
-  it("loads a fact burst from the main action", async () => {
+  it("loads a date history burst from the main action", async () => {
     const user = userEvent.setup();
-    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => {
-      const href = String(url);
-
-      if (href.includes("42_(number)")) {
-        return Response.json({ extract: "42 is a pronic number." });
-      }
-
-      if (href.includes("/summary/42")) {
-        return Response.json({ extract: "42 is the answer in a famous book." });
-      }
-
-      if (href.includes("api.wikimedia.org")) {
-        return Response.json({ events: [{ year: 2026, text: "May 18 kept a strange little footnote." }] });
-      }
-
-      return new Response("not here", { status: 404 });
-    }));
+    vi.stubGlobal("fetch", vi.fn(mockDateFetch));
 
     render(<App />);
-    await user.clear(screen.getByLabelText(/number input/i));
-    await user.type(screen.getByLabelText(/number input/i), "42");
-    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+    await user.clear(screen.getByLabelText(/date input/i));
+    await user.type(screen.getByLabelText(/date input/i), "5/18");
+    await user.click(screen.getByRole("button", { name: /summon history/i }));
 
-    expect(await screen.findByText("math")).toBeInTheDocument();
-    expect(screen.getByText(/42 is pronic/i)).toBeInTheDocument();
+    expect(await screen.findByText("event")).toBeInTheDocument();
+    expect(screen.getAllByText(/Mount St\. Helens/i).length).toBeGreaterThan(0);
+    expect(screen.getByText("birth")).toBeInTheDocument();
+    expect(screen.getByText(/Bertrand Russell/i)).toBeInTheDocument();
     expect(screen.getByText("history")).toBeInTheDocument();
-    expect(screen.getByText(/asterisk/i)).toBeInTheDocument();
-    expect(screen.getAllByText("picked")).toHaveLength(3);
+    expect(screen.getByText(/Constantine/i)).toBeInTheDocument();
+    expect(screen.getByText("date")).toBeInTheDocument();
+    expect(screen.queryByText(/<b>|\\displaystyle|\{/i)).not.toBeInTheDocument();
   });
 
-  it("replaces cards from the previous search", async () => {
+  it("replaces cards from the previous date search", async () => {
     const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn(mockDateFetch));
 
     render(<App />);
 
-    await user.clear(screen.getByLabelText(/number input/i));
-    await user.type(screen.getByLabelText(/number input/i), "17");
-    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+    await user.clear(screen.getByLabelText(/date input/i));
+    await user.type(screen.getByLabelText(/date input/i), "5/18");
+    await user.click(screen.getByRole("button", { name: /summon history/i }));
 
     const factZone = screen.getByLabelText(/fact cards/i);
-    expect(await within(factZone).findByText(/Fermat prime/i)).toBeInTheDocument();
-    expect(within(factZone).getByText(/cicadas/i)).toBeInTheDocument();
+    expect((await within(factZone).findAllByText(/Mount St\. Helens/i)).length).toBeGreaterThan(0);
 
-    await user.clear(screen.getByLabelText(/number input/i));
-    await user.type(screen.getByLabelText(/number input/i), "42");
-    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+    await user.clear(screen.getByLabelText(/date input/i));
+    await user.type(screen.getByLabelText(/date input/i), "7/20");
+    await user.click(screen.getByRole("button", { name: /summon history/i }));
 
-    expect(await within(factZone).findByText(/42 is pronic/i)).toBeInTheDocument();
-    expect(within(factZone).queryByText(/Fermat prime/i)).not.toBeInTheDocument();
-    expect(within(factZone).queryByText(/cicadas/i)).not.toBeInTheDocument();
+    expect((await within(factZone).findAllByText(/Apollo 11/i)).length).toBeGreaterThan(0);
+    expect(within(factZone).queryByText(/Mount St\. Helens/i)).not.toBeInTheDocument();
   });
 
   it("does not reuse card keys across repeated bursts", async () => {
     const user = userEvent.setup();
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => {
-      const href = String(url);
-
-      if (href.includes("api.wikimedia.org")) {
-        return Response.json({ events: [{ year: 2026, text: "May 18 kept a strange little footnote." }] });
-      }
-
-      return new Response("not here", { status: 404 });
-    }));
+    vi.stubGlobal("fetch", vi.fn(mockDateFetch));
 
     render(<App />);
 
-    await user.clear(screen.getByLabelText(/number input/i));
-    await user.type(screen.getByLabelText(/number input/i), "42");
-    await user.click(screen.getByRole("button", { name: /summon facts/i }));
-    expect(await screen.findByText(/42 is pronic/i)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText(/date input/i));
+    await user.type(screen.getByLabelText(/date input/i), "5/18");
+    await user.click(screen.getByRole("button", { name: /summon history/i }));
+    expect((await screen.findAllByText(/Mount St\. Helens/i)).length).toBeGreaterThan(0);
 
-    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+    await user.click(screen.getByRole("button", { name: /summon history/i }));
     await waitFor(() => {
-      expect(screen.getAllByText(/42 is pronic/i)).toHaveLength(1);
+      expect(screen.getByLabelText(/fact cards/i).querySelectorAll(".fact-card")).toHaveLength(4);
     });
 
     expect(errorSpy.mock.calls.flat().join(" ")).not.toMatch(/same key/i);
     errorSpy.mockRestore();
   });
 
-  it("shows fallback cards when the API fails", async () => {
+  it("shows fallback date cards when all date APIs fail", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
 
     render(<App />);
-    await user.clear(screen.getByLabelText(/number input/i));
-    await user.type(screen.getByLabelText(/number input/i), "987654321098");
-    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+    await user.clear(screen.getByLabelText(/date input/i));
+    await user.type(screen.getByLabelText(/date input/i), "5/18");
+    await user.click(screen.getByRole("button", { name: /summon history/i }));
 
     expect((await screen.findAllByText("fallback")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/987654321098/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/5\/18/).length).toBeGreaterThan(0);
   });
 
   it("validates birthday mode before decoding", async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: /birth code/i }));
+    await user.click(screen.getByRole("button", { name: /birth date/i }));
     await user.click(screen.getByRole("button", { name: /decode birthday/i }));
 
     expect(screen.getByText(/choose a date first/i)).toBeInTheDocument();
   });
 
-  it("runs a number battle", async () => {
+  it("runs a year scan", async () => {
     const user = userEvent.setup();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(new Response("42 has better stories than most integers.")),
-    );
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("events.historylabs.io/year/1969")) {
+        return Response.json({
+          events: [{ date: "July 20", description: "Apollo 11 lands on the Moon." }],
+        });
+      }
+
+      return Response.json({ events: [{ date: "May 18", description: "Mount St. Helens erupts." }] });
+    }));
 
     render(<App />);
-    await user.click(screen.getByRole("button", { name: /number battle/i }));
-    await user.clear(screen.getByLabelText(/left number/i));
-    await user.type(screen.getByLabelText(/left number/i), "42");
-    await user.clear(screen.getByLabelText(/right number/i));
-    await user.type(screen.getByLabelText(/right number/i), "7");
-    await user.click(screen.getByRole("button", { name: /fight numbers/i }));
+    await user.click(screen.getByRole("button", { name: /year scan/i }));
+    await user.clear(screen.getByLabelText(/first year/i));
+    await user.type(screen.getByLabelText(/first year/i), "1969");
+    await user.clear(screen.getByLabelText(/second year/i));
+    await user.type(screen.getByLabelText(/second year/i), "1980");
+    await user.click(screen.getByRole("button", { name: /compare years/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/winner/i)).toBeInTheDocument();
     });
   });
 });
+
+async function mockDateFetch(url: string | URL | Request): Promise<Response> {
+  const href = String(url);
+  const isApolloDate = href.includes("/7/20") || href.includes("month=7&day=20") || href.includes("/07/20/");
+
+  if (href.includes("/events/")) {
+    return Response.json({
+      events: [
+        {
+          year: isApolloDate ? 1969 : 1980,
+          text: isApolloDate ? "Apollo 11 lands on the Moon." : "<b>Mount St. Helens</b> erupts in Washington.",
+        },
+      ],
+    });
+  }
+
+  if (href.includes("/births/")) {
+    return Response.json({
+      births: [{ year: 1872, text: "Bertrand Russell, mathematician and philosopher, is born." }],
+    });
+  }
+
+  if (href.includes("events.historylabs.io/date")) {
+    return Response.json({
+      events: [{ year: "332", content: "Emperor Constantine announces free food distributions." }],
+    });
+  }
+
+  if (href.includes("api.dayinhistory.dev")) {
+    return Response.json({
+      results: [{ year: "2005", description: "Hubble images confirm two additional moons orbiting Pluto." }],
+    });
+  }
+
+  throw new Error(`unexpected url ${href}`);
+}

@@ -34,9 +34,21 @@ export function getUnixTimestamp(date = new Date()): number {
   return Math.floor(date.getTime() / 1000);
 }
 
+export function getDateCode(date = new Date()): string {
+  return `${date.getMonth() + 1}${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function formatDateInput(date = new Date()): string {
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+}
+
 export function splitDigits(value: string | number): string[] {
   const digits = String(value).match(/\d/g);
   return digits?.length ? digits : ["0"];
+}
+
+export function sanitizeDateInput(value: string): string {
+  return value.replace(/[^\d/-]/g, "").slice(0, 10);
 }
 
 export function sanitizeNumberInput(value: string): string {

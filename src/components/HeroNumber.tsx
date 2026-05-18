@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { splitDigits } from "../lib/numbers";
 
 interface HeroNumberProps {
-  timestamp: number;
+  timestamp: string;
   inputValue: string;
   loading: boolean;
   onInputChange: (value: string) => void;
@@ -30,16 +30,16 @@ export function HeroNumber({
           <Hash aria-hidden="true" size={18} />
           Number Lore
         </span>
-        <span className="pulse-copy">Live clock. Strange numbers. Better facts.</span>
+        <span className="pulse-copy">Dates only. Stranger history. Cleaner sources.</span>
       </div>
 
       <h1 id="number-lore-title" className="sr-only">
         Number Lore
       </h1>
 
-      <p className="timestamp-label">Unix Timestamp - live</p>
+      <p className="timestamp-label">Today - date code</p>
 
-      <div className="timestamp-wrap" aria-label="Live Unix timestamp">
+      <div className="timestamp-wrap" aria-label="Live date code">
         {digits.map((digit, index) => (
           <button
             className="digit"
@@ -55,40 +55,40 @@ export function HeroNumber({
       </div>
 
       <p className="hero-hint">
-        Click any digit - or <span>type any number</span> below
+        Click any digit - or <span>type any date</span> below
       </p>
 
-      <div className="command-strip" aria-label="number controls">
+      <div className="command-strip" aria-label="date controls">
         <label className="number-field">
-          <span>Type a number. Hit the burst.</span>
+          <span>Type a date. Hit the burst.</span>
           <input
-            aria-label="Number input"
+            aria-label="Date input"
             value={inputValue}
-            inputMode="numeric"
+            inputMode="text"
             onChange={(event) => onInputChange(event.target.value)}
-            placeholder="42"
+            placeholder="5/18"
           />
         </label>
         <button className="primary-action" type="button" onClick={onSummon} disabled={loading}>
           <Sparkles aria-hidden="true" size={18} />
-          {loading ? "Reading" : "Summon facts"}
+          {loading ? "Reading" : "Summon history"}
         </button>
       </div>
 
-      <div className="quick-modes" aria-label="quick number picks">
-        <button className="mode-btn" type="button" onClick={() => onQuickPick(42)}>
-          42
+      <div className="quick-modes" aria-label="quick date picks">
+        <button className="mode-btn" type="button" onClick={() => onQuickPick(inputValue)}>
+          Today
         </button>
-        <button className="mode-btn" type="button" onClick={() => onQuickPick(0)}>
-          0
+        <button className="mode-btn" type="button" onClick={() => onQuickPick("5/18")}>
+          5/18
         </button>
-        <button className="mode-btn" type="button" onClick={() => onQuickPick(1729)}>
-          1729
+        <button className="mode-btn" type="button" onClick={() => onQuickPick("7/20")}>
+          7/20
         </button>
-        <button className="mode-btn" type="button" onClick={() => onQuickPick(3141592)}>
-          3141592
+        <button className="mode-btn" type="button" onClick={() => onQuickPick("1/1")}>
+          1/1
         </button>
-        <button className="mode-btn" type="button" onClick={() => onQuickPick(Math.floor(Math.random() * 1000))}>
+        <button className="mode-btn" type="button" onClick={() => onQuickPick(`${Math.floor(Math.random() * 12) + 1}/${Math.floor(Math.random() * 28) + 1}`)}>
           Random
         </button>
       </div>

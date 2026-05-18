@@ -1,5 +1,5 @@
 export interface TimelineEntry {
-  number: string;
+  date: string;
   title: string;
   era: string;
   fact: string;
@@ -7,58 +7,57 @@ export interface TimelineEntry {
 
 export const timelineEntries: TimelineEntry[] = [
   {
-    number: "0",
-    title: "The placeholder that became a weapon",
-    era: "5th century",
-    fact: "Zero turned empty space into arithmetic you could build with.",
+    date: "01/01",
+    title: "The calendar reload",
+    era: "annual",
+    fact: "New Year's Day is a cultural reset button: promises, ledgers, budgets, and public rituals all restart at once.",
   },
   {
-    number: "1",
-    title: "The unit",
-    era: "always",
-    fact: "Every count starts by trusting one thing enough to name it.",
+    date: "03/14",
+    title: "Circles get a holiday",
+    era: "Pi Day",
+    fact: "March 14 turned a notation joke into an annual excuse for math departments to act less serious.",
   },
   {
-    number: "π",
-    title: "The circle leak",
-    era: "ancient",
-    fact: "Pi keeps showing up whenever straight lines lose control.",
+    date: "04/12",
+    title: "Humans leave Earth",
+    era: "1961",
+    fact: "Yuri Gagarin's orbit made spaceflight stop being theory and become a timestamp.",
   },
   {
-    number: "e",
-    title: "Growth's quiet engine",
-    era: "1683",
-    fact: "Euler's number turns compounding from bookkeeping into weather.",
+    date: "05/18",
+    title: "The mountain opens",
+    era: "1980",
+    fact: "Mount St. Helens erupted with enough force to flatten forest and redraw the shape of the volcano.",
   },
   {
-    number: "42",
-    title: "The joke with a passport",
-    era: "1979",
-    fact: "A book joke escaped into search bars, classrooms, and commit messages.",
+    date: "07/20",
+    title: "The Moon gets footprints",
+    era: "1969",
+    fact: "Apollo 11 landed on the Moon and made one date do the work of a whole century of engineering ambition.",
   },
   {
-    number: "100",
-    title: "The clean score",
-    era: "base ten",
-    fact: "Two zeros can make people feel like a system finally behaved.",
+    date: "08/06",
+    title: "The atomic age arrives",
+    era: "1945",
+    fact: "Hiroshima made a scientific breakthrough inseparable from civilian catastrophe and geopolitical dread.",
   },
   {
-    number: "10^100",
-    title: "Googol",
-    era: "1938",
-    fact: "A child named a number so large it made ordinary big talk look small.",
+    date: "09/11",
+    title: "A date becomes shorthand",
+    era: "2001",
+    fact: "Some dates stop being calendar coordinates and become a name people say without adding the year.",
   },
   {
-    number: "6.022e23",
-    title: "Avogadro's crowd",
-    era: "1811",
-    fact: "Chemists needed a headcount for the invisible, so this number took the job.",
+    date: "10/04",
+    title: "The first artificial moon",
+    era: "1957",
+    fact: "Sputnik's beep made the Cold War audible and pushed science education into emergency mode.",
   },
   {
-    number: "0:00:00",
-    title: "Unix epoch",
-    era: "1970",
-    fact: "Modern timekeeping put a stake in the ground and started counting seconds.",
+    date: "12/25",
+    title: "A ritual collision",
+    era: "annual",
+    fact: "Christmas carries religion, commerce, folklore, family logistics, and a global supply chain on the same date.",
   },
 ];
-

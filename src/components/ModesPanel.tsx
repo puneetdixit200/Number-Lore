@@ -5,7 +5,7 @@ export type Mode = "daily" | "battle" | "birthday";
 
 interface ModesPanelProps {
   activeMode: Mode;
-  dailyNumber: number;
+  dailyNumber: string;
   loading: boolean;
   battleLeft: string;
   battleRight: string;
@@ -43,15 +43,15 @@ export function ModesPanel({
   onDecodeBirthday,
 }: ModesPanelProps) {
   return (
-    <section className="modes" aria-label="number modes">
-      <div className="mode-tabs" role="tablist" aria-label="Number modes">
+    <section className="modes" aria-label="date modes">
+      <div className="mode-tabs" role="tablist" aria-label="Date modes">
         <button
           type="button"
           className={activeMode === "daily" ? "active" : ""}
           onClick={() => onModeChange("daily")}
         >
           <CalendarDays aria-hidden="true" size={18} />
-          Daily number
+          Today
         </button>
         <button
           type="button"
@@ -59,7 +59,7 @@ export function ModesPanel({
           onClick={() => onModeChange("battle")}
         >
           <Swords aria-hidden="true" size={18} />
-          Number battle
+          Year scan
         </button>
         <button
           type="button"
@@ -67,19 +67,19 @@ export function ModesPanel({
           onClick={() => onModeChange("birthday")}
         >
           <Cake aria-hidden="true" size={18} />
-          Birth code
+          Birth date
         </button>
       </div>
 
       {activeMode === "daily" ? (
         <div className="mode-panel">
           <div>
-            <span className="panel-kicker">today's draw</span>
+            <span className="panel-kicker">today's date</span>
             <strong>{dailyNumber}</strong>
           </div>
           <button type="button" onClick={onDaily} disabled={loading}>
             <Dices aria-hidden="true" size={18} />
-            Read daily number
+            Read today
           </button>
         </div>
       ) : null}
@@ -87,18 +87,18 @@ export function ModesPanel({
       {activeMode === "battle" ? (
         <div className="mode-panel battle-panel">
           <label>
-            <span>Left number</span>
+            <span>First year</span>
             <input
-              aria-label="Left number"
+              aria-label="First year"
               value={battleLeft}
               inputMode="numeric"
               onChange={(event) => onBattleLeftChange(event.target.value)}
             />
           </label>
           <label>
-            <span>Right number</span>
+            <span>Second year</span>
             <input
-              aria-label="Right number"
+              aria-label="Second year"
               value={battleRight}
               inputMode="numeric"
               onChange={(event) => onBattleRightChange(event.target.value)}
@@ -106,7 +106,7 @@ export function ModesPanel({
           </label>
           <button type="button" onClick={onRunBattle} disabled={loading}>
             <Swords aria-hidden="true" size={18} />
-            Fight numbers
+            Compare years
           </button>
           {battleResult ? (
             <div className="battle-result" aria-live="polite">
@@ -160,4 +160,3 @@ export function ModesPanel({
     </section>
   );
 }
-

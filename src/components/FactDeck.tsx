@@ -9,7 +9,7 @@ export function FactDeck({ cards }: FactDeckProps) {
   return (
     <section className="fact-zone" aria-label="fact cards">
       {cards.length === 0 ? (
-        <p className="empty-deck">Click a digit. The facts will make a mess here.</p>
+        <p className="empty-deck">Pick a date. The history will make a mess here.</p>
       ) : (
         <div className="fact-deck">
           {cards.map((card) => (
@@ -26,7 +26,7 @@ export function FactDeck({ cards }: FactDeckProps) {
             >
               <div className="fact-card-top">
                 <span className={`badge badge-${card.type}`}>{card.type}</span>
-                {card.source !== "numbersapi" ? <span className="source-badge">{formatSource(card.source)}</span> : null}
+                <span className="source-badge">{formatSource(card.source)}</span>
               </div>
               <strong>{card.number}</strong>
               <p>{card.text}</p>
@@ -40,15 +40,12 @@ export function FactDeck({ cards }: FactDeckProps) {
 
 function formatSource(source: FactCard["source"]): string {
   const labels: Record<FactCard["source"], string> = {
-    curated: "picked",
     computed: "computed",
-    numbersapi: "numbers",
-    corsproxy: "proxy",
-    opentdb: "open trivia",
-    wikipedia: "wiki",
     wikimedia: "wiki date",
-    byabbe: "history",
-    fapi: "f-api",
+    historylabs: "historylabs",
+    dayinhistory: "day in history",
+    zenquotes: "zenquotes",
+    apininjas: "api ninjas",
     fallback: "fallback",
   };
 

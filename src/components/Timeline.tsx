@@ -4,13 +4,13 @@ export function Timeline() {
   return (
     <section className="timeline-section" aria-labelledby="timeline-title">
       <div className="section-heading">
-        <span>number history</span>
-        <h2 id="timeline-title">A vertical argument with the past</h2>
+        <span>date history</span>
+        <h2 id="timeline-title">Dates that keep echoing</h2>
       </div>
       <div className="timeline">
         {timelineEntries.map((entry) => (
-          <article className="timeline-entry" key={`${entry.number}-${entry.title}`}>
-            <div className="timeline-number">{entry.number}</div>
+          <article className="timeline-entry" key={`${entry.date}-${entry.title}`}>
+            <div className="timeline-number">{entry.date}</div>
             <div className="timeline-copy">
               <span>{entry.era}</span>
               <h3>{entry.title}</h3>
@@ -22,4 +22,3 @@ export function Timeline() {
     </section>
   );
 }
-

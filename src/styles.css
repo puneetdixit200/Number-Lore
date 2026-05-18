@@ -539,6 +539,18 @@ meter {
   color: #f0a040;
 }
 
+.badge-event {
+  background: rgba(64, 208, 192, 0.18);
+  color: var(--teal);
+}
+
+.badge-birth,
+.badge-death,
+.badge-holiday {
+  background: rgba(240, 96, 144, 0.18);
+  color: var(--rose);
+}
+
 .badge-lore,
 .badge-history,
 .badge-daily {
