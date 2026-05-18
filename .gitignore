@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.vite/
+.vercel/
+playwright-report/
+test-results/
+.superpowers/
+*.local
+*.log
+
