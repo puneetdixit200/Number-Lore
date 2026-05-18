@@ -2,7 +2,7 @@ import type { BirthdayNumber } from "../lib/numbers";
 import { sanitizeNumberInput } from "../lib/numbers";
 
 export type FactType = "math" | "trivia" | "date" | "daily" | "birthday" | "battle";
-export type FactSource = "numbersapi" | "fallback";
+export type FactSource = "numbersapi" | "wikipedia" | "wikimedia" | "byabbe" | "fallback";
 
 export interface FactCard {
   id: string;
@@ -20,6 +20,9 @@ export type NumbersApiRequest =
   | { kind: "date"; month: number; day: number };
 
 const API_ROOT = "https://numbersapi.com";
+const WIKIPEDIA_SUMMARY_ROOT = "https://en.wikipedia.org/api/rest_v1/page/summary";
+const WIKIMEDIA_ON_THIS_DAY_ROOT = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events";
+const BYABBE_ON_THIS_DAY_ROOT = "https://byabbe.se/on-this-day";
 
 export function buildNumbersApiUrl(request: NumbersApiRequest): string {
   if (request.kind === "date") {
@@ -27,6 +30,18 @@ export function buildNumbersApiUrl(request: NumbersApiRequest): string {
   }
 
   return `${API_ROOT}/${request.number}/${request.kind}`;
+}
+
+export function buildWikipediaSummaryUrl(title: string): string {
+  return `${WIKIPEDIA_SUMMARY_ROOT}/${title.trim().replace(/\s+/g, "_")}`;
+}
+
+export function buildWikimediaOnThisDayUrl(month: number, day: number): string {
+  return `${WIKIMEDIA_ON_THIS_DAY_ROOT}/${padDatePart(month)}/${padDatePart(day)}`;
+}
+
+export function buildByabbeOnThisDayUrl(month: number, day: number): string {
+  return `${BYABBE_ON_THIS_DAY_ROOT}/${month}/${day}/events.json`;
 }
 
 export async function fetchFactBurst(number: string | number, date = new Date()): Promise<FactCard[]> {
@@ -63,8 +78,8 @@ export async function fetchFactsForBirthday(numbers: BirthdayNumber[]): Promise<
       const numberText = String(entry.value);
 
       try {
-        const text = await fetchText(buildNumbersApiUrl({ kind: "trivia", number: numberText }));
-        return createCard("birthday", numberText, `${entry.label}: ${text}`, "numbersapi", index);
+        const fact = await fetchNumberFact("trivia", numberText);
+        return createCard("birthday", numberText, `${entry.label}: ${fact.text}`, fact.source, index);
       } catch {
         return createFallbackFact("birthday", numberText, entry.label, index);
       }
@@ -74,15 +89,11 @@ export async function fetchFactsForBirthday(numbers: BirthdayNumber[]): Promise<
 
 export async function fetchBattleFacts(number: string | number): Promise<string[]> {
   const numberText = normalizeNumber(number);
-  const requests: NumbersApiRequest[] = [
-    { kind: "math", number: numberText },
-    { kind: "trivia", number: numberText },
-  ];
 
   return Promise.all(
-    requests.map(async (request) => {
+    (["math", "trivia"] as const).map(async (kind) => {
       try {
-        return await fetchText(buildNumbersApiUrl(request));
+        return (await fetchNumberFact(kind, numberText)).text;
       } catch {
         return createFallbackFact("battle", numberText).text;
       }
@@ -116,11 +127,51 @@ async function fetchFactCard(
   index: number,
 ): Promise<FactCard> {
   try {
-    const text = await fetchText(buildNumbersApiUrl(request));
-    return createCard(type, number, text, "numbersapi", index);
+    const fact = request.kind === "date" ? await fetchDateFact(request.month, request.day) : await fetchNumberFact(type, number);
+    return createCard(type, number, fact.text, fact.source, index);
   } catch {
     return createFallbackFact(type, number, "number", index);
   }
+}
+
+async function fetchNumberFact(type: "math" | "trivia" | "battle" | FactType, number: string): Promise<LiveFact> {
+  const kind = type === "math" ? "math" : "trivia";
+  const wikipediaTitle = kind === "math" ? `${number}_(number)` : number;
+  const providers: Array<() => Promise<LiveFact>> = [
+    async () => ({ source: "wikipedia", text: await fetchWikipediaSummary(wikipediaTitle) }),
+  ];
+
+  if (kind === "trivia") {
+    providers.push(async () => ({ source: "wikipedia", text: await fetchWikipediaSummary(`${number}_(number)`) }));
+  }
+
+  providers.push(async () => ({ source: "numbersapi", text: await fetchText(buildNumbersApiUrl({ kind, number })) }));
+
+  return fetchFirstLiveFact(providers);
+}
+
+async function fetchDateFact(month: number, day: number): Promise<LiveFact> {
+  return fetchFirstLiveFact([
+    async () => ({ source: "wikimedia", text: await fetchWikimediaOnThisDay(month, day) }),
+    async () => ({ source: "byabbe", text: await fetchByabbeOnThisDay(month, day) }),
+    async () => ({ source: "numbersapi", text: await fetchText(buildNumbersApiUrl({ kind: "date", month, day })) }),
+  ]);
+}
+
+async function fetchFirstLiveFact(providers: Array<() => Promise<LiveFact>>): Promise<LiveFact> {
+  for (const provider of providers) {
+    try {
+      const fact = await provider();
+
+      if (fact.text.trim()) {
+        return fact;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error("all live fact providers failed");
 }
 
 async function fetchText(url: string): Promise<string> {
@@ -139,6 +190,55 @@ async function fetchText(url: string): Promise<string> {
   return text;
 }
 
+async function fetchWikipediaSummary(title: string): Promise<string> {
+  const data = await fetchJson<WikipediaSummary>(buildWikipediaSummaryUrl(title));
+  const extract = data.extract?.trim();
+
+  const normalizedExtract = extract?.toLowerCase() ?? "";
+
+  if (
+    !extract ||
+    normalizedExtract.includes("may refer to") ||
+    normalizedExtract.includes("most commonly refers to")
+  ) {
+    throw new Error("Wikipedia summary did not include a usable extract");
+  }
+
+  return extract;
+}
+
+async function fetchWikimediaOnThisDay(month: number, day: number): Promise<string> {
+  const data = await fetchJson<WikimediaOnThisDay>(buildWikimediaOnThisDayUrl(month, day));
+  const event = data.events?.find((item) => item.text?.trim());
+
+  if (!event) {
+    throw new Error("Wikimedia returned no events");
+  }
+
+  return `${event.year}: ${event.text}`;
+}
+
+async function fetchByabbeOnThisDay(month: number, day: number): Promise<string> {
+  const data = await fetchJson<ByabbeOnThisDay>(buildByabbeOnThisDayUrl(month, day));
+  const event = data.events?.find((item) => item.description?.trim());
+
+  if (!event) {
+    throw new Error("Byabbe returned no events");
+  }
+
+  return `${event.year}: ${event.description}`;
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Provider returned ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
 function createCard(type: FactType, number: string, text: string, source: FactSource, index: number): FactCard {
   const seed = hashText(`${type}-${number}-${text}-${index}`);
 
@@ -152,6 +252,10 @@ function createCard(type: FactType, number: string, text: string, source: FactSo
     offsetX: ((seed >>> 5) % 520) - 260,
     offsetY: ((seed >>> 9) % 300) - 150,
   };
+}
+
+function padDatePart(value: number): string {
+  return String(value).padStart(2, "0");
 }
 
 function normalizeNumber(number: string | number): string {
@@ -171,4 +275,27 @@ function hashText(value: string): number {
   }
 
   return hash >>> 0;
+}
+
+interface LiveFact {
+  source: Exclude<FactSource, "fallback">;
+  text: string;
+}
+
+interface WikipediaSummary {
+  extract?: string;
+}
+
+interface WikimediaOnThisDay {
+  events?: Array<{
+    year: number | string;
+    text?: string;
+  }>;
+}
+
+interface ByabbeOnThisDay {
+  events?: Array<{
+    year: number | string;
+    description?: string;
+  }>;
 }

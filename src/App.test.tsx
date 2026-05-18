@@ -13,18 +13,31 @@ describe("Number Lore app", () => {
 
     expect(screen.getByLabelText(/live unix timestamp/i)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /inspect digit/i }).length).toBeGreaterThan(5);
+    expect(screen.getByRole("link", { name: /github/i })).toHaveAttribute(
+      "href",
+      "https://github.com/puneetdixit200/Number-Lore",
+    );
   });
 
   it("loads a fact burst from the main action", async () => {
     const user = userEvent.setup();
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce(new Response("42 is a pronic number."))
-        .mockResolvedValueOnce(new Response("42 is the answer in a famous book."))
-        .mockResolvedValueOnce(new Response("May 18 once held a strange little footnote.")),
-    );
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("42_(number)")) {
+        return Response.json({ extract: "42 is a pronic number." });
+      }
+
+      if (href.includes("/summary/42")) {
+        return Response.json({ extract: "42 is the answer in a famous book." });
+      }
+
+      if (href.includes("api.wikimedia.org")) {
+        return Response.json({ events: [{ year: 2026, text: "May 18 kept a strange little footnote." }] });
+      }
+
+      return new Response("not here", { status: 404 });
+    }));
 
     render(<App />);
     await user.clear(screen.getByLabelText(/number input/i));

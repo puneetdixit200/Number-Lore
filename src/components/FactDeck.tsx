@@ -26,7 +26,7 @@ export function FactDeck({ cards }: FactDeckProps) {
             >
               <div className="fact-card-top">
                 <span className={`badge badge-${card.type}`}>{card.type}</span>
-                {card.source === "fallback" ? <span className="source-badge">fallback</span> : null}
+                {card.source !== "numbersapi" ? <span className="source-badge">{formatSource(card.source)}</span> : null}
               </div>
               <strong>{card.number}</strong>
               <p>{card.text}</p>
@@ -36,4 +36,16 @@ export function FactDeck({ cards }: FactDeckProps) {
       )}
     </section>
   );
+}
+
+function formatSource(source: FactCard["source"]): string {
+  const labels: Record<FactCard["source"], string> = {
+    numbersapi: "numbers",
+    wikipedia: "wiki",
+    wikimedia: "wiki date",
+    byabbe: "history",
+    fallback: "fallback",
+  };
+
+  return labels[source];
 }

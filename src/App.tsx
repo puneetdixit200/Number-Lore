@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { GitBranch } from "lucide-react";
 import { FactDeck } from "./components/FactDeck";
 import { HeroNumber } from "./components/HeroNumber";
 import { type Mode, ModesPanel } from "./components/ModesPanel";
@@ -169,7 +170,16 @@ export default function App() {
         <FactDeck cards={cards} />
       </div>
       <Timeline />
+      <a
+        aria-label="GitHub repository"
+        className="github-link"
+        href="https://github.com/puneetdixit200/Number-Lore"
+        rel="noreferrer"
+        target="_blank"
+      >
+        <GitBranch aria-hidden="true" size={18} />
+        GitHub
+      </a>
     </main>
   );
 }
-

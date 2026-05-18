@@ -528,6 +528,34 @@ meter {
   animation: rainFall linear forwards;
 }
 
+.github-link {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.4rem;
+  border: 1px solid rgba(238, 247, 246, 0.18);
+  border-radius: 999px;
+  background: rgba(7, 11, 15, 0.86);
+  color: #eef7f6;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(12px);
+}
+
+.github-link:hover,
+.github-link:focus-visible {
+  border-color: rgba(229, 255, 90, 0.72);
+  color: #e5ff5a;
+  outline: none;
+}
+
 @keyframes digitPulse {
   0%,
   100% {
