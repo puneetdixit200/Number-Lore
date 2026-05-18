@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch } from "lucide-react";
 import { FactDeck } from "./components/FactDeck";
 import { HeroNumber } from "./components/HeroNumber";
@@ -41,6 +41,7 @@ export default function App() {
   const [birthdayDate, setBirthdayDate] = useState("");
   const [birthdayTime, setBirthdayTime] = useState("");
   const [birthdayStatus, setBirthdayStatus] = useState("");
+  const burstIdRef = useRef(0);
 
   const dailyNumber = useMemo(() => getDailyNumber(), []);
 
@@ -58,7 +59,13 @@ export default function App() {
   }, [inputTouched]);
 
   function setIncomingCards(nextCards: FactCard[], number: string | number) {
-    setCards((current) => [...nextCards, ...current].slice(0, MAX_CARDS));
+    burstIdRef.current += 1;
+    const burstCards = nextCards.map((card, index) => ({
+      ...card,
+      id: `${card.id}-burst-${burstIdRef.current}-${index}`,
+    }));
+
+    setCards((current) => [...burstCards, ...current].slice(0, MAX_CARDS));
     releaseRain(String(number));
   }
 

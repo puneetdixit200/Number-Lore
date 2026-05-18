@@ -40,6 +40,8 @@ export function FactDeck({ cards }: FactDeckProps) {
 
 function formatSource(source: FactCard["source"]): string {
   const labels: Record<FactCard["source"], string> = {
+    curated: "picked",
+    computed: "computed",
     numbersapi: "numbers",
     wikipedia: "wiki",
     wikimedia: "wiki date",

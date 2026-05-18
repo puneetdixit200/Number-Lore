@@ -45,7 +45,37 @@ describe("Number Lore app", () => {
     await user.click(screen.getByRole("button", { name: /summon facts/i }));
 
     expect(await screen.findByText("math")).toBeInTheDocument();
-    expect(screen.getByText(/42 is a pronic number/i)).toBeInTheDocument();
+    expect(screen.getByText(/42 is pronic/i)).toBeInTheDocument();
+    expect(screen.getAllByText("picked")).toHaveLength(2);
+  });
+
+  it("does not reuse card keys across repeated bursts", async () => {
+    const user = userEvent.setup();
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("api.wikimedia.org")) {
+        return Response.json({ events: [{ year: 2026, text: "May 18 kept a strange little footnote." }] });
+      }
+
+      return new Response("not here", { status: 404 });
+    }));
+
+    render(<App />);
+
+    await user.clear(screen.getByLabelText(/number input/i));
+    await user.type(screen.getByLabelText(/number input/i), "42");
+    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+    expect(await screen.findByText(/42 is pronic/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /summon facts/i }));
+    await waitFor(() => {
+      expect(screen.getAllByText(/42 is pronic/i)).toHaveLength(2);
+    });
+
+    expect(errorSpy.mock.calls.flat().join(" ")).not.toMatch(/same key/i);
+    errorSpy.mockRestore();
   });
 
   it("shows fallback cards when the API fails", async () => {

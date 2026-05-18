@@ -8,6 +8,7 @@ import {
   fetchBattleFacts,
   fetchFactBurst,
   fetchFactsForBirthday,
+  isInterestingProviderText,
 } from "./facts";
 
 describe("facts service", () => {
@@ -36,11 +37,15 @@ describe("facts service", () => {
       const href = String(url);
 
       if (href.includes("7_(number)")) {
-        return Response.json({ extract: "7 is the number of classical planets." });
+        return Response.json({
+          extract: "7 is tied to classical planets, musical scale steps, and old luck rituals across cultures.",
+        });
       }
 
       if (href.includes("/summary/7")) {
-        return Response.json({ extract: "7 is lucky in many card rooms." });
+        return Response.json({
+          extract: "7 carried luck into dice tables, card rooms, and folklore because it kept turning up in rituals.",
+        });
       }
 
       if (href.includes("api.wikimedia.org")) {
@@ -59,6 +64,64 @@ describe("facts service", () => {
     expect(fetchMock).not.toHaveBeenCalledWith("https://numbersapi.com/7/math");
   });
 
+  it("rejects obvious provider boilerplate", () => {
+    expect(
+      isInterestingProviderText("42 (forty-two) is the natural number following 41 and preceding 43.", "42"),
+    ).toBe(false);
+    expect(isInterestingProviderText("42 is a pronic number: 6 times 7.", "42")).toBe(false);
+    expect(
+      isInterestingProviderText(
+        "1729 is the Hardy-Ramanujan taxicab number, the smallest number expressible as two cubes in two ways.",
+        "1729",
+      ),
+    ).toBe(true);
+  });
+
+  it("uses curated famous-number facts before live providers", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("api.wikimedia.org")) {
+        return Response.json({ events: [{ year: 1970, text: "Unix time gets a useful origin story." }] });
+      }
+
+      throw new Error(`number provider should not be called for curated fact: ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(42, new Date("2026-05-08T12:00:00"));
+
+    expect(cards[0].source).toBe("curated");
+    expect(cards[1].source).toBe("curated");
+    expect(cards[0].text).toMatch(/6 x 7|pronic/i);
+    expect(cards[1].text).toMatch(/Douglas Adams/i);
+    expect(fetchMock).not.toHaveBeenCalledWith("https://en.wikipedia.org/api/rest_v1/page/summary/42_(number)");
+  });
+
+  it("computes interesting facts for ordinary numbers before using dull provider text", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("api.wikimedia.org")) {
+        return Response.json({ events: [{ year: 1970, text: "Unix time gets a useful origin story." }] });
+      }
+
+      if (href.includes("121")) {
+        return Response.json({ extract: "121 is the natural number following 120 and preceding 122." });
+      }
+
+      throw new Error(`unexpected url ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(121, new Date("2026-05-08T12:00:00"));
+
+    expect(cards[0].source).toBe("computed");
+    expect(cards[1].source).toBe("computed");
+    expect(cards[0].text).toMatch(/11 x 11|square/i);
+    expect(cards[1].text).toMatch(/palindrome|mirror/i);
+  });
+
   it("returns fallback cards when fetch fails", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
@@ -69,7 +132,7 @@ describe("facts service", () => {
     expect(cards[0].text).toMatch(/13/);
   });
 
-  it("uses backup APIs before local fallback", async () => {
+  it("uses curated facts before live APIs for known numbers", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
@@ -95,8 +158,8 @@ describe("facts service", () => {
 
     const cards = await fetchFactBurst(42, new Date("2026-05-08T12:00:00"));
 
-    expect(cards.map((card) => card.source)).toEqual(["wikipedia", "wikipedia", "wikimedia"]);
-    expect(cards[0].text).toMatch(/natural number/);
+    expect(cards.map((card) => card.source)).toEqual(["curated", "curated", "wikimedia"]);
+    expect(cards[0].text).toMatch(/pronic|pseudoperfect/i);
     expect(cards[2].text).toMatch(/1970/);
   });
 
@@ -104,12 +167,14 @@ describe("facts service", () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
-      if (href.includes("42_(number)")) {
-        return Response.json({ extract: "42 is the natural number after 41 and before 43." });
+      if (href.includes("314_(number)")) {
+        return Response.json({
+          extract: "314 is used as a stand-in for pi when decimal points are not welcome on old keypads.",
+        });
       }
 
-      if (href.endsWith("/summary/42")) {
-        return Response.json({ extract: "42 or The 42 most commonly refers to:" });
+      if (href.endsWith("/summary/314")) {
+        return Response.json({ extract: "314 or The 314 most commonly refers to:" });
       }
 
       if (href.includes("api.wikimedia.org")) {
@@ -120,10 +185,10 @@ describe("facts service", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const cards = await fetchFactBurst(42, new Date("2026-05-08T12:00:00"));
+    const cards = await fetchFactBurst(314, new Date("2026-05-08T12:00:00"));
 
     expect(cards[1].text).not.toMatch(/most commonly refers to/i);
-    expect(cards[1].text).toMatch(/natural number/);
+    expect(cards[1].text).toMatch(/pi/i);
   });
 
   it("uses the second date backup when Wikimedia fails", async () => {
