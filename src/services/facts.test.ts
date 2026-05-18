@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildByabbeOnThisDayUrl,
+  buildFapiHistoryUrl,
   buildNumbersApiUrl,
+  buildOpenTriviaDbUrl,
+  buildProxiedNumbersDateUrl,
   buildWikipediaSearchUrl,
   buildWikimediaOnThisDayUrl,
   buildWikipediaSummaryUrl,
@@ -27,6 +30,9 @@ describe("facts service", () => {
     expect(buildWikipediaSummaryUrl("42_(number)")).toBe(
       "https://en.wikipedia.org/api/rest_v1/page/summary/42_(number)",
     );
+    expect(buildOpenTriviaDbUrl()).toBe("https://opentdb.com/api.php?amount=1&category=19");
+    expect(buildProxiedNumbersDateUrl(5, 8)).toBe("https://corsproxy.io/?https%3A%2F%2Fnumbersapi.com%2F5%2F8%2Fdate");
+    expect(buildFapiHistoryUrl()).toBe("https://f-api.ir/api/facts/category/history");
     expect(buildWikimediaOnThisDayUrl(5, 8)).toBe(
       "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events/05/08",
     );
@@ -54,17 +60,29 @@ describe("facts service", () => {
         });
       }
 
-      if (href.includes("w/api.php")) {
+      if (href.includes("opentdb.com/api.php?amount=1&category=19")) {
         return Response.json({
-          query: {
-            search: [
-              {
-                title: "987654321098 (number)",
-                snippet: "987654321098 has a search-backed story instead of a calendar detour.",
-              },
-            ],
-          },
+          response_code: 0,
+          results: [
+            {
+              question: "Which mathematician gave his name to the constant e?",
+              correct_answer: "Euler",
+            },
+          ],
         });
+      }
+
+      if (href.includes("f-api.ir/api/facts/category/history")) {
+        return Response.json([
+          {
+            title: "Antikythera mechanism",
+            fact: "The Antikythera mechanism used bronze gears to model astronomical cycles more than two thousand years ago.",
+            verified: true,
+            source: "National Archaeological Museum",
+            year_discovered: -100,
+            interesting_rating: 10,
+          },
+        ]);
       }
 
       throw new Error(`unexpected url ${href}`);
@@ -74,8 +92,8 @@ describe("facts service", () => {
     const cards = await fetchFactBurst(987_654_321_098, new Date("2026-05-18T12:00:00"));
 
     expect(cards).toHaveLength(3);
-    expect(cards.map((card) => card.type)).toEqual(["math", "trivia", "lore"]);
-    expect(cards.map((card) => card.source)).toEqual(["wikipedia", "wikipedia", "wikipedia"]);
+    expect(cards.map((card) => card.type)).toEqual(["math", "trivia", "history"]);
+    expect(cards.map((card) => card.source)).toEqual(["wikipedia", "opentdb", "fapi"]);
     expect(fetchMock).not.toHaveBeenCalledWith("https://numbersapi.com/987654321098/math");
   });
 
@@ -117,10 +135,8 @@ describe("facts service", () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
-      if (href.includes("api.wikimedia.org")) {
-        return Response.json({
-          events: [{ year: 2005, text: "Hubble confirms two additional moons around Pluto." }],
-        });
+      if (href.includes("corsproxy.io")) {
+        return new Response("2005: Hubble confirms two additional moons around Pluto.", { status: 200 });
       }
 
       throw new Error(`single digit number provider should not be called: ${href}`);
@@ -139,7 +155,7 @@ describe("facts service", () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
-      if (href.includes("api.wikimedia.org") || href.includes("byabbe.se")) {
+      if (href.includes("api.wikimedia.org") || href.includes("byabbe.se") || href.includes("corsproxy.io")) {
         throw new Error(`ordinary number burst should not fetch today's date: ${href}`);
       }
 
@@ -149,7 +165,7 @@ describe("facts service", () => {
 
     const cards = await fetchFactBurst(17, new Date("2026-05-18T12:00:00"));
 
-    expect(cards.map((card) => card.type)).toEqual(["math", "trivia", "lore"]);
+    expect(cards.map((card) => card.type)).toEqual(["math", "trivia", "history"]);
     expect(cards.map((card) => card.number)).toEqual(["17", "17", "17"]);
     expect(cards.map((card) => card.source)).toEqual(["curated", "curated", "curated"]);
     expect(cards.map((card) => card.text).join(" ")).not.toMatch(/5\/18|May 18/i);
@@ -160,10 +176,8 @@ describe("facts service", () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
-      if (href.includes("api.wikimedia.org")) {
-        return Response.json({
-          events: [{ year: 2005, text: "Hubble confirms two additional moons around Pluto." }],
-        });
+      if (href.includes("corsproxy.io")) {
+        return new Response("2005: Hubble confirms two additional moons around Pluto.", { status: 200 });
       }
 
       throw new Error(`unexpected url ${href}`);
@@ -173,11 +187,12 @@ describe("facts service", () => {
     const cards = await fetchFactBurst(518, new Date("2026-01-01T12:00:00"));
 
     expect(cards[2].type).toBe("date");
+    expect(cards[2].source).toBe("corsproxy");
     expect(cards[2].number).toBe("5/18");
     expect(cards[2].text).toMatch(/Hubble|Pluto/i);
   });
 
-  it("searches Wikipedia for number lore before using computed filler", async () => {
+  it("searches Wikipedia for number history before using computed filler", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
@@ -192,6 +207,10 @@ describe("facts service", () => {
             ],
           },
         });
+      }
+
+      if (href.includes("f-api.ir")) {
+        throw new Error("history provider offline");
       }
 
       if (href.includes("Forty-six")) {
@@ -211,18 +230,22 @@ describe("facts service", () => {
 
     const cards = await fetchFactBurst(46, new Date("2026-05-18T12:00:00"));
 
-    expect(cards[2].type).toBe("lore");
+    expect(cards[2].type).toBe("history");
     expect(cards[2].source).toBe("wikipedia");
     expect(cards[2].number).toBe("46");
     expect(cards[2].text).toMatch(/cultural trail|numbering systems/i);
   });
 
-  it("rejects age and crime search noise for number lore", async () => {
+  it("rejects age and crime search noise for number history", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
       if (href.includes("w/api.php") && href.includes("46+%28number%29")) {
         return Response.json({ query: { search: [] } });
+      }
+
+      if (href.includes("f-api.ir")) {
+        throw new Error("history provider offline");
       }
 
       if (href.includes("w/api.php") && href.includes("46+math+prime")) {
@@ -302,6 +325,10 @@ describe("facts service", () => {
   it("turns Unix timestamps into computed facts instead of provider fallback", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
+
+      if (href.includes("corsproxy.io") || href.includes("numbersapi.com")) {
+        return new Response("not here", { status: 503 });
+      }
 
       if (href.includes("api.wikimedia.org")) {
         return Response.json({
@@ -435,7 +462,7 @@ describe("facts service", () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
-      if (href.includes("numbersapi.com") || href.includes("api.wikimedia.org")) {
+      if (href.includes("corsproxy.io") || href.includes("numbersapi.com") || href.includes("api.wikimedia.org")) {
         return new Response("not here", { status: 503 });
       }
 

@@ -15,8 +15,9 @@ describe("Number Lore app", () => {
     expect(screen.getAllByRole("button", { name: /inspect digit/i }).length).toBeGreaterThan(5);
     expect(screen.getByRole("link", { name: /github/i })).toHaveAttribute(
       "href",
-      "https://github.com/puneetdixit200/Number-Lore",
+      "https://github.com/puneetdixit200",
     );
+    expect(screen.getByText("PUNEET DIXIT")).toBeInTheDocument();
   });
 
   it("loads a fact burst from the main action", async () => {
@@ -46,7 +47,7 @@ describe("Number Lore app", () => {
 
     expect(await screen.findByText("math")).toBeInTheDocument();
     expect(screen.getByText(/42 is pronic/i)).toBeInTheDocument();
-    expect(screen.getByText("lore")).toBeInTheDocument();
+    expect(screen.getByText("history")).toBeInTheDocument();
     expect(screen.getByText(/asterisk/i)).toBeInTheDocument();
     expect(screen.getAllByText("picked")).toHaveLength(3);
   });

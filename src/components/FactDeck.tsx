@@ -43,9 +43,12 @@ function formatSource(source: FactCard["source"]): string {
     curated: "picked",
     computed: "computed",
     numbersapi: "numbers",
+    corsproxy: "proxy",
+    opentdb: "open trivia",
     wikipedia: "wiki",
     wikimedia: "wiki date",
     byabbe: "history",
+    fapi: "f-api",
     fallback: "fallback",
   };
 

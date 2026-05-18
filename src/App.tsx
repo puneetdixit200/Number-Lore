@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { GitBranch } from "lucide-react";
 import { FactDeck } from "./components/FactDeck";
 import { HeroNumber } from "./components/HeroNumber";
 import { type Mode, ModesPanel } from "./components/ModesPanel";
@@ -178,17 +177,21 @@ export default function App() {
       </div>
       <Timeline />
       <footer className="site-footer">
-        <p>Number data from curated lore, computed checks, Wikipedia date history, and Numbers API.</p>
+        <p>Number data from curated reads, Wikipedia, Open Trivia DB, Numbers API, and f-api history.</p>
       </footer>
       <a
-        aria-label="GitHub repository"
+        aria-label="GitHub profile for Puneet Dixit"
         className="github-link"
-        href="https://github.com/puneetdixit200/Number-Lore"
+        href="https://github.com/puneetdixit200"
         rel="noreferrer"
         target="_blank"
       >
-        <GitBranch aria-hidden="true" size={18} />
-        GitHub
+        <span>Made with</span>
+        <span className="heart" aria-hidden="true">
+          ♥
+        </span>
+        <span>by</span>
+        <strong>PUNEET DIXIT</strong>
       </a>
     </main>
   );

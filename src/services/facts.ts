@@ -1,8 +1,18 @@
 import type { BirthdayNumber } from "../lib/numbers";
 import { sanitizeNumberInput } from "../lib/numbers";
 
-export type FactType = "math" | "trivia" | "date" | "lore" | "daily" | "birthday" | "battle";
-export type FactSource = "curated" | "computed" | "numbersapi" | "wikipedia" | "wikimedia" | "byabbe" | "fallback";
+export type FactType = "math" | "trivia" | "date" | "history" | "lore" | "daily" | "birthday" | "battle";
+export type FactSource =
+  | "curated"
+  | "computed"
+  | "numbersapi"
+  | "corsproxy"
+  | "opentdb"
+  | "wikipedia"
+  | "wikimedia"
+  | "byabbe"
+  | "fapi"
+  | "fallback";
 
 export interface FactCard {
   id: string;
@@ -20,6 +30,9 @@ export type NumbersApiRequest =
   | { kind: "date"; month: number; day: number };
 
 const API_ROOT = "https://numbersapi.com";
+const CORS_PROXY_ROOT = "https://corsproxy.io/?";
+const OPEN_TRIVIA_DB_URL = "https://opentdb.com/api.php?amount=1&category=19";
+const F_API_HISTORY_URL = "https://f-api.ir/api/facts/category/history";
 const WIKIPEDIA_ACTION_API_ROOT = "https://en.wikipedia.org/w/api.php";
 const WIKIPEDIA_SUMMARY_ROOT = "https://en.wikipedia.org/api/rest_v1/page/summary";
 const WIKIMEDIA_ON_THIS_DAY_ROOT = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events";
@@ -32,6 +45,18 @@ export function buildNumbersApiUrl(request: NumbersApiRequest): string {
   }
 
   return `${API_ROOT}/${request.number}/${request.kind}`;
+}
+
+export function buildProxiedNumbersDateUrl(month: number, day: number): string {
+  return `${CORS_PROXY_ROOT}${encodeURIComponent(buildNumbersApiUrl({ kind: "date", month, day }))}`;
+}
+
+export function buildOpenTriviaDbUrl(): string {
+  return OPEN_TRIVIA_DB_URL;
+}
+
+export function buildFapiHistoryUrl(): string {
+  return F_API_HISTORY_URL;
 }
 
 export function buildWikipediaSummaryUrl(title: string): string {
@@ -99,7 +124,7 @@ export async function fetchFactBurst(number: string | number, _date = new Date()
   const encodedDate = deriveDateFromNumber(numberText);
   const contextCard = encodedDate
     ? fetchDateCard(encodedDate.month, encodedDate.day, 2)
-    : fetchLoreCard(numberText, 2);
+    : fetchHistoryCard(numberText, 2);
 
   return Promise.all([
     fetchFactCard({ kind: "math", number: numberText }, "math", numberText, 0),
@@ -164,6 +189,7 @@ export function createFallbackFact(type: FactType, number: string | number, labe
     math: `${numberText} has ${digitCount} digit${digitCount === 1 ? "" : "s"} and a digit sum of ${digitSum}.`,
     trivia: `${numberText} is off the wire, so the local read is blunt: ${digitCount} digits, sum ${digitSum}.`,
     date: `${numberText} did not answer. The fallback marker stays on the calendar anyway.`,
+    history: `${numberText} has no clean history story on the wire. Its digits still add to ${digitSum}.`,
     lore: `${numberText} has no clean story on the wire. Its digits still add to ${digitSum}.`,
     daily: `Daily number ${numberText}: ${digitCount} digits, digit sum ${digitSum}, no permission requested.`,
     birthday: `${label}: ${numberText}. Digit sum ${digitSum}; keep the receipt.`,
@@ -196,12 +222,12 @@ async function fetchDateCard(month: number, day: number, index: number): Promise
   }
 }
 
-async function fetchLoreCard(number: string, index: number): Promise<FactCard> {
+async function fetchHistoryCard(number: string, index: number): Promise<FactCard> {
   try {
-    const fact = await fetchNumberLoreFact(number);
-    return createCard("lore", number, fact.text, fact.source, index);
+    const fact = await fetchNumberHistoryFact(number);
+    return createCard("history", number, fact.text, fact.source, index);
   } catch {
-    return createFallbackFact("lore", number, "number", index);
+    return createFallbackFact("history", number, "number", index);
   }
 }
 
@@ -213,21 +239,18 @@ async function fetchNumberFact(type: "math" | "trivia" | "battle" | FactType, nu
     return localFact;
   }
 
-  const wikipediaTitle = kind === "math" ? `${number}_(number)` : number;
-  const providers: Array<() => Promise<LiveFact>> = [
-    async () => ({ source: "wikipedia", text: await fetchWikipediaSummary(wikipediaTitle) }),
-  ];
-
-  if (kind === "trivia") {
-    providers.push(async () => ({ source: "wikipedia", text: await fetchWikipediaSummary(`${number}_(number)`) }));
-  }
-
-  providers.push(async () => ({ source: "numbersapi", text: await fetchText(buildNumbersApiUrl({ kind, number })) }));
+  const providers: Array<() => Promise<LiveFact>> =
+    kind === "math"
+      ? [async () => ({ source: "wikipedia", text: await fetchWikipediaSummary(`${number}_(number)`) })]
+      : [
+          async () => ({ source: "opentdb", text: await fetchOpenTriviaFact() }),
+          async () => ({ source: "wikipedia", text: await fetchWikipediaSummary(`${number}_(number)`) }),
+        ];
 
   return fetchFirstLiveFact(providers);
 }
 
-async function fetchNumberLoreFact(number: string): Promise<LiveFact> {
+async function fetchNumberHistoryFact(number: string): Promise<LiveFact> {
   const localFact = getCuratedNumberFact("lore", number) ?? getComputedLoreFact(number, false);
 
   if (localFact) {
@@ -235,6 +258,7 @@ async function fetchNumberLoreFact(number: string): Promise<LiveFact> {
   }
 
   return fetchFirstLiveFact([
+    async () => ({ source: "fapi", text: await fetchFapiHistoryFact(number) }),
     async () => ({ source: "wikipedia", text: await fetchWikipediaNumberLore(number) }),
     async () => {
       const fact = getComputedLoreFact(number, true);
@@ -250,9 +274,10 @@ async function fetchNumberLoreFact(number: string): Promise<LiveFact> {
 
 async function fetchDateFact(month: number, day: number): Promise<LiveFact> {
   return fetchFirstLiveFact([
+    async () => ({ source: "corsproxy", text: await fetchText(buildProxiedNumbersDateUrl(month, day)) }),
+    async () => ({ source: "numbersapi", text: await fetchText(buildNumbersApiUrl({ kind: "date", month, day })) }),
     async () => ({ source: "wikimedia", text: await fetchWikimediaOnThisDay(month, day) }),
     async () => ({ source: "byabbe", text: await fetchByabbeOnThisDay(month, day) }),
-    async () => ({ source: "numbersapi", text: await fetchText(buildNumbersApiUrl({ kind: "date", month, day })) }),
   ]);
 }
 
@@ -276,7 +301,7 @@ async function fetchText(url: string): Promise<string> {
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Numbers API returned ${response.status}`);
+    throw new Error(`Provider returned ${response.status}`);
   }
 
   const text = (await response.text()).trim();
@@ -286,6 +311,45 @@ async function fetchText(url: string): Promise<string> {
   }
 
   return text;
+}
+
+async function fetchOpenTriviaFact(): Promise<string> {
+  const data = await fetchJson<OpenTriviaDbResponse>(buildOpenTriviaDbUrl());
+  const result = data.results?.[0];
+
+  if (data.response_code !== 0 || !result) {
+    throw new Error("Open Trivia DB returned no math trivia");
+  }
+
+  const question = decodeHtmlEntities(result.question).replace(/\s+/g, " ").trim();
+  const answer = decodeHtmlEntities(result.correct_answer).replace(/\s+/g, " ").trim();
+
+  if (question.length < 24 || answer.length < 1) {
+    throw new Error("Open Trivia DB returned weak trivia");
+  }
+
+  return `Open Trivia DB asks: ${question} Answer: ${answer}.`;
+}
+
+async function fetchFapiHistoryFact(number: string): Promise<string> {
+  const data = await fetchJson<FapiHistoryResponse>(buildFapiHistoryUrl());
+  const facts = normalizeFapiFacts(data);
+  const fact = selectBestFapiFact(facts, number);
+
+  if (!fact?.fact) {
+    throw new Error("f-api returned no history facts");
+  }
+
+  const title = decodeHtmlEntities(fact.title ?? "").trim();
+  const body = decodeHtmlEntities(fact.fact).replace(/\s+/g, " ").trim();
+  const year =
+    typeof fact.year_discovered === "number" && Number.isFinite(fact.year_discovered)
+      ? `${fact.year_discovered}: `
+      : "";
+  const source = fact.source ? ` Source: ${decodeHtmlEntities(fact.source).trim()}.` : "";
+  const prefix = title && !body.toLowerCase().startsWith(title.toLowerCase()) ? `${title}: ` : "";
+
+  return shortenText(`${year}${prefix}${body}${source}`);
 }
 
 async function fetchWikipediaSummary(title: string): Promise<string> {
@@ -363,6 +427,65 @@ async function fetchJson<T>(url: string): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+function normalizeFapiFacts(data: FapiHistoryResponse): FapiHistoryFact[] {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data.data)) {
+    return data.data;
+  }
+
+  if (Array.isArray(data.facts)) {
+    return data.facts;
+  }
+
+  if (Array.isArray(data.results)) {
+    return data.results;
+  }
+
+  return [];
+}
+
+function selectBestFapiFact(facts: FapiHistoryFact[], number: string): FapiHistoryFact | null {
+  const lowerNumber = number.toLowerCase();
+  const candidates = facts
+    .map((fact, index) => {
+      const text = `${fact.title ?? ""} ${fact.fact ?? ""}`.toLowerCase();
+      let score = 0;
+
+      if (!fact.fact || fact.fact.trim().length < 50) {
+        score -= 40;
+      }
+
+      if (text.includes(lowerNumber)) {
+        score += 14;
+      }
+
+      if (fact.verified) {
+        score += 10;
+      }
+
+      if (typeof fact.interesting_rating === "number") {
+        score += Math.min(12, Math.max(0, fact.interesting_rating));
+      }
+
+      if (typeof fact.year_discovered === "number" && fact.year_discovered < 1900) {
+        score += 4;
+      }
+
+      if (/\b(ancient|astronom|cipher|mechanism|manuscript|discover|invention|mathemat|science|computer)\b/.test(text)) {
+        score += 8;
+      }
+
+      return { fact, index, score };
+    })
+    .filter((entry) => entry.score > -20)
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+
+  return candidates[0]?.fact ?? null;
 }
 
 function createCard(type: FactType, number: string, text: string, source: FactSource, index: number): FactCard {
@@ -711,6 +834,17 @@ function stripHtml(value: string): string {
   return value.replace(/<[^>]*>/g, "").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, "&");
 }
 
+function decodeHtmlEntities(value: string): string {
+  return stripHtml(value)
+    .replace(/&apos;/g, "'")
+    .replace(/&rsquo;/g, "'")
+    .replace(/&lsquo;/g, "'")
+    .replace(/&rdquo;/g, '"')
+    .replace(/&ldquo;/g, '"')
+    .replace(/&hellip;/g, "...")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)));
+}
+
 function deriveDateFromNumber(number: string): { month: number; day: number } | null {
   const digits = number.replace(/\D/g, "");
 
@@ -849,6 +983,31 @@ interface LiveFact {
 
 interface WikipediaSummary {
   extract?: string;
+}
+
+interface OpenTriviaDbResponse {
+  response_code: number;
+  results?: Array<{
+    question: string;
+    correct_answer: string;
+  }>;
+}
+
+type FapiHistoryResponse =
+  | FapiHistoryFact[]
+  | {
+      data?: FapiHistoryFact[];
+      facts?: FapiHistoryFact[];
+      results?: FapiHistoryFact[];
+    };
+
+interface FapiHistoryFact {
+  title?: string;
+  fact?: string;
+  source?: string;
+  verified?: boolean;
+  year_discovered?: number;
+  interesting_rating?: number;
 }
 
 interface WikipediaSearchResponse {
