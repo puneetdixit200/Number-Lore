@@ -8,6 +8,7 @@ interface HeroNumberProps {
   loading: boolean;
   onInputChange: (value: string) => void;
   onDigitClick: (digit: string) => void;
+  onQuickPick: (number: string | number) => void;
   onSummon: () => void;
 }
 
@@ -17,6 +18,7 @@ export function HeroNumber({
   loading,
   onInputChange,
   onDigitClick,
+  onQuickPick,
   onSummon,
 }: HeroNumberProps) {
   const digits = splitDigits(timestamp);
@@ -28,19 +30,21 @@ export function HeroNumber({
           <Hash aria-hidden="true" size={18} />
           Number Lore
         </span>
-        <span className="pulse-copy">Unix clock. Live feed. No ceremony.</span>
+        <span className="pulse-copy">Live clock. Strange numbers. Better facts.</span>
       </div>
 
       <h1 id="number-lore-title" className="sr-only">
         Number Lore
       </h1>
 
+      <p className="timestamp-label">Unix Timestamp - live</p>
+
       <div className="timestamp-wrap" aria-label="Live Unix timestamp">
         {digits.map((digit, index) => (
           <button
             className="digit"
             key={`${timestamp}-${index}`}
-            style={{ "--digit-index": index } as CSSProperties}
+            style={{ "--digit-index": index, "--digit-delay": `${index * 0.09}s` } as CSSProperties}
             type="button"
             aria-label={`Inspect digit ${digit}`}
             onClick={() => onDigitClick(digit)}
@@ -49,6 +53,10 @@ export function HeroNumber({
           </button>
         ))}
       </div>
+
+      <p className="hero-hint">
+        Click any digit - or <span>type any number</span> below
+      </p>
 
       <div className="command-strip" aria-label="number controls">
         <label className="number-field">
@@ -64,6 +72,24 @@ export function HeroNumber({
         <button className="primary-action" type="button" onClick={onSummon} disabled={loading}>
           <Sparkles aria-hidden="true" size={18} />
           {loading ? "Reading" : "Summon facts"}
+        </button>
+      </div>
+
+      <div className="quick-modes" aria-label="quick number picks">
+        <button className="mode-btn" type="button" onClick={() => onQuickPick(42)}>
+          42
+        </button>
+        <button className="mode-btn" type="button" onClick={() => onQuickPick(0)}>
+          0
+        </button>
+        <button className="mode-btn" type="button" onClick={() => onQuickPick(1729)}>
+          1729
+        </button>
+        <button className="mode-btn" type="button" onClick={() => onQuickPick(3141592)}>
+          3141592
+        </button>
+        <button className="mode-btn" type="button" onClick={() => onQuickPick(Math.floor(Math.random() * 1000))}>
+          Random
         </button>
       </div>
     </section>

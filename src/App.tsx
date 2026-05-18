@@ -140,6 +140,7 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <div className="starfield" aria-hidden="true" />
       <NumberRain particles={particles} />
       <HeroNumber
         timestamp={timestamp}
@@ -150,6 +151,7 @@ export default function App() {
           setInputValue(sanitizeNumberInput(value));
         }}
         onDigitClick={handleDigitClick}
+        onQuickPick={(number) => void runBurst(String(number))}
         onSummon={() => void runBurst()}
       />
       <div className="workbench">
@@ -175,6 +177,9 @@ export default function App() {
         <FactDeck cards={cards} />
       </div>
       <Timeline />
+      <footer className="site-footer">
+        <p>Number data from curated lore, computed checks, Wikipedia date history, and Numbers API.</p>
+      </footer>
       <a
         aria-label="GitHub repository"
         className="github-link"
