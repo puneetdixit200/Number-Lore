@@ -32,19 +32,21 @@ describe("facts service", () => {
     expect(buildByabbeOnThisDayUrl(5, 8)).toBe("https://byabbe.se/on-this-day/5/8/events.json");
   });
 
-  it("fetches a math, trivia, and date burst from quiet live providers first", async () => {
+  it("uses live providers when local systems do not cover a number", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
 
-      if (href.includes("7_(number)")) {
+      if (href.includes("987654321098_(number)")) {
         return Response.json({
-          extract: "7 is tied to classical planets, musical scale steps, and old luck rituals across cultures.",
+          extract:
+            "987654321098 is a large enough number for the app to ask live providers before trying backup text.",
         });
       }
 
-      if (href.includes("/summary/7")) {
+      if (href.includes("/summary/987654321098")) {
         return Response.json({
-          extract: "7 carried luck into dice tables, card rooms, and folklore because it kept turning up in rituals.",
+          extract:
+            "987654321098 looks like a countdown with one digit missing, which is better than boilerplate.",
         });
       }
 
@@ -56,12 +58,12 @@ describe("facts service", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const cards = await fetchFactBurst(7, new Date("2026-05-18T12:00:00"));
+    const cards = await fetchFactBurst(987_654_321_098, new Date("2026-05-18T12:00:00"));
 
     expect(cards).toHaveLength(3);
     expect(cards.map((card) => card.type)).toEqual(["math", "trivia", "date"]);
     expect(cards.map((card) => card.source)).toEqual(["wikipedia", "wikipedia", "wikimedia"]);
-    expect(fetchMock).not.toHaveBeenCalledWith("https://numbersapi.com/7/math");
+    expect(fetchMock).not.toHaveBeenCalledWith("https://numbersapi.com/987654321098/math");
   });
 
   it("rejects obvious provider boilerplate", () => {
@@ -98,6 +100,28 @@ describe("facts service", () => {
     expect(fetchMock).not.toHaveBeenCalledWith("https://en.wikipedia.org/api/rest_v1/page/summary/42_(number)");
   });
 
+  it("uses curated facts for single digit clicks", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("api.wikimedia.org")) {
+        return Response.json({
+          events: [{ year: 2005, text: "Hubble confirms two additional moons around Pluto." }],
+        });
+      }
+
+      throw new Error(`single digit number provider should not be called: ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(7, new Date("2026-05-18T12:00:00"));
+
+    expect(cards[0].source).toBe("curated");
+    expect(cards[1].source).toBe("curated");
+    expect(cards[0].text).toMatch(/prime|seven/i);
+    expect(cards[1].text).toMatch(/luck|ritual|dice/i);
+  });
+
   it("computes interesting facts for ordinary numbers before using dull provider text", async () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) => {
       const href = String(url);
@@ -120,6 +144,36 @@ describe("facts service", () => {
     expect(cards[1].source).toBe("computed");
     expect(cards[0].text).toMatch(/11 x 11|square/i);
     expect(cards[1].text).toMatch(/palindrome|mirror/i);
+  });
+
+  it("turns Unix timestamps into computed facts instead of provider fallback", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("api.wikimedia.org")) {
+        return Response.json({
+          events: [
+            {
+              year: 2005,
+              text: "A second photo from the Hubble Space Telescope confirms that Pluto has two additional moons.",
+            },
+          ],
+        });
+      }
+
+      throw new Error(`number provider should not be needed for timestamp facts: ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(1_779_062_400, new Date("2026-05-18T12:00:00"));
+
+    expect(cards[0].source).toBe("computed");
+    expect(cards[1].source).toBe("computed");
+    expect(cards[0].text).toMatch(/Unix time|UTC/i);
+    expect(cards[1].text).toMatch(/1970|days/i);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      "https://en.wikipedia.org/api/rest_v1/page/summary/1779062400_(number)",
+    );
   });
 
   it("returns fallback cards when fetch fails", async () => {
@@ -161,6 +215,39 @@ describe("facts service", () => {
     expect(cards.map((card) => card.source)).toEqual(["curated", "curated", "wikimedia"]);
     expect(cards[0].text).toMatch(/pronic|pseudoperfect/i);
     expect(cards[2].text).toMatch(/1970/);
+  });
+
+  it("chooses stronger date events instead of the newest feed item", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url);
+
+      if (href.includes("api.wikimedia.org")) {
+        return Response.json({
+          events: [
+            {
+              year: 2019,
+              text: "United States presidential election: Joe Biden launches his presidential campaign.",
+            },
+            {
+              year: 2005,
+              text: "A second photo from the Hubble Space Telescope confirms that Pluto has two additional moons, Nix and Hydra.",
+            },
+            {
+              year: 1980,
+              text: "Mount St. Helens erupts in Washington, reshaping the mountain and flattening surrounding forest.",
+            },
+          ],
+        });
+      }
+
+      throw new Error(`unexpected url ${href}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const cards = await fetchFactBurst(42, new Date("2026-05-18T12:00:00"));
+
+    expect(cards[2].text).not.toMatch(/presidential campaign/i);
+    expect(cards[2].text).toMatch(/Hubble|Pluto|Mount St\. Helens/i);
   });
 
   it("skips weak Wikipedia disambiguation summaries", async () => {

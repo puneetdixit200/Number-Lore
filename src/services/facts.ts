@@ -23,6 +23,7 @@ const API_ROOT = "https://numbersapi.com";
 const WIKIPEDIA_SUMMARY_ROOT = "https://en.wikipedia.org/api/rest_v1/page/summary";
 const WIKIMEDIA_ON_THIS_DAY_ROOT = "https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/events";
 const BYABBE_ON_THIS_DAY_ROOT = "https://byabbe.se/on-this-day";
+const COMPUTABLE_INTEGER_LIMIT = 10_000_000_000;
 
 export function buildNumbersApiUrl(request: NumbersApiRequest): string {
   if (request.kind === "date") {
@@ -242,7 +243,7 @@ async function fetchWikipediaSummary(title: string): Promise<string> {
 
 async function fetchWikimediaOnThisDay(month: number, day: number): Promise<string> {
   const data = await fetchJson<WikimediaOnThisDay>(buildWikimediaOnThisDayUrl(month, day));
-  const event = data.events?.find((item) => item.text?.trim());
+  const event = selectBestHistoricalEvent(data.events, (item) => item.text, (item) => item.year);
 
   if (!event) {
     throw new Error("Wikimedia returned no events");
@@ -253,7 +254,7 @@ async function fetchWikimediaOnThisDay(month: number, day: number): Promise<stri
 
 async function fetchByabbeOnThisDay(month: number, day: number): Promise<string> {
   const data = await fetchJson<ByabbeOnThisDay>(buildByabbeOnThisDayUrl(month, day));
-  const event = data.events?.find((item) => item.description?.trim());
+  const event = selectBestHistoricalEvent(data.events, (item) => item.description, (item) => item.year);
 
   if (!event) {
     throw new Error("Byabbe returned no events");
@@ -297,7 +298,7 @@ function getCuratedNumberFact(kind: "math" | "trivia", number: string): LiveFact
 function getComputedNumberFact(kind: "math" | "trivia", number: string): LiveFact | null {
   const value = Number(number);
 
-  if (!Number.isSafeInteger(value) || value < 0 || value > 1_000_000_000) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > COMPUTABLE_INTEGER_LIMIT) {
     return null;
   }
 
@@ -312,6 +313,9 @@ function buildComputedInsights(value: number): string[] {
   const digits = String(value);
   const digitSum = sumDigits(value);
   const squareRoot = Math.sqrt(value);
+  const timestampInsights = buildUnixTimestampInsights(value);
+
+  insights.push(...timestampInsights);
 
   if (Number.isInteger(squareRoot) && value > 1) {
     insights.push(`${value} is a square: ${squareRoot} x ${squareRoot}. That gives it a grid you can actually draw.`);
@@ -338,7 +342,42 @@ function buildComputedInsights(value: number): string[] {
     insights.push(`${value} has a repeated-digit run. The number stutters before it moves on.`);
   }
 
+  if (insights.length < 2 && value > 12) {
+    const divisor = findSmallestDivisor(value);
+
+    if (divisor) {
+      insights.push(
+        `${value} cracks first at ${divisor}: ${divisor} x ${value / divisor}. That is the first clean split in its factor tree.`,
+      );
+    } else {
+      insights.push(`${value} is prime. Trial division reaches its square root without finding a clean split.`);
+    }
+  }
+
+  if (insights.length < 2 && value > 12) {
+    insights.push(
+      `${value} takes ${value.toString(2).length} bits in binary and wears 0x${value.toString(16).toUpperCase()} in hex.`,
+    );
+  }
+
   return insights.slice(0, 2);
+}
+
+function buildUnixTimestampInsights(value: number): string[] {
+  const date = new Date(value * 1000);
+  const year = date.getUTCFullYear();
+
+  if (year < 2000 || year > 2100 || Number.isNaN(date.getTime())) {
+    return [];
+  }
+
+  const utcStamp = date.toISOString().replace(".000Z", " UTC").replace("T", " ");
+  const daysSinceEpoch = Math.floor(value / 86_400);
+
+  return [
+    `${value} is Unix time for ${utcStamp}. The giant number is a clock reading, not a random integer.`,
+    `${value} sits ${daysSinceEpoch} days after 1970-01-01 UTC. Every new day adds exactly 86400.`,
+  ];
 }
 
 function sumDigits(value: number): number {
@@ -360,6 +399,111 @@ function isTriangular(value: number): boolean {
 
 function hasRepeatedDigitRun(value: string): boolean {
   return /(\d)\1{1,}/.test(value);
+}
+
+function findSmallestDivisor(value: number): number | null {
+  if (value < 2) {
+    return null;
+  }
+
+  if (value % 2 === 0) {
+    return value === 2 ? null : 2;
+  }
+
+  const limit = Math.floor(Math.sqrt(value));
+
+  for (let divisor = 3; divisor <= limit; divisor += 2) {
+    if (value % divisor === 0) {
+      return divisor;
+    }
+  }
+
+  return null;
+}
+
+function selectBestHistoricalEvent<T>(
+  events: T[] | undefined,
+  getText: (event: T) => string | undefined,
+  getYear: (event: T) => number | string,
+): T | null {
+  const candidates = (events ?? [])
+    .map((event, index) => {
+      const text = getText(event)?.trim();
+      return text
+        ? {
+            event,
+            index,
+            score: scoreHistoricalEvent(text, getYear(event)),
+            year: parseHistoricalYear(getYear(event)),
+          }
+        : null;
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate));
+
+  candidates.sort((left, right) => {
+    if (right.score !== left.score) {
+      return right.score - left.score;
+    }
+
+    if (left.year !== right.year) {
+      return left.year - right.year;
+    }
+
+    return left.index - right.index;
+  });
+
+  return candidates[0]?.event ?? null;
+}
+
+function scoreHistoricalEvent(text: string, year: number | string): number {
+  const lower = text.toLowerCase();
+  const eventYear = parseHistoricalYear(year);
+  const currentYear = new Date().getFullYear();
+  let score = 0;
+
+  if (Number.isFinite(eventYear)) {
+    score += Math.min(18, Math.max(0, Math.floor((currentYear - eventYear) / 20)));
+  }
+
+  if (text.length >= 72) {
+    score += 3;
+  }
+
+  const rewards: Array<[RegExp, number]> = [
+    [/\b(hubble|pluto|space telescope|moon|astronom|comet|eclipse|planet|supernova|meteor|asteroid)\b/, 22],
+    [/\b(discover|discovers|discovered|confirm|confirms|invent|invents|invented|patent|decipher|decoded)\b/, 14],
+    [/\b(first|oldest|smallest|largest|fastest|earliest|only)\b/, 10],
+    [/\b(computer|internet|cipher|code|mathemat|physics|chemistry|biology|genome|nuclear|atomic)\b/, 10],
+    [/\b(erupt|erupts|volcano|earthquake|tsunami|impact crater|mount st\.? helens)\b/, 9],
+    [/\b(publishes|premieres|opens|founds|founded|completed|unveiled|built)\b/, 7],
+    [/\b(ancient|medieval|renaissance|manuscript|archaeolog|telescope|observatory)\b/, 7],
+  ];
+
+  const penalties: Array<[RegExp, number]> = [
+    [/\b(presidential campaign|election campaign|announces? (his|her|their) candidacy|launches? (his|her|their) presidential campaign)\b/, 34],
+    [/\b(general election|presidential election|parliamentary election|referendum|cabinet|minister|politician)\b/, 12],
+    [/\b(kills?|killed|shooting|massacre|bombing|terrorist|crashes?|landslide|die|dies|dead)\b/, 10],
+    [/\b(football|baseball|basketball|cricket|soccer|cup final|league title)\b/, 6],
+  ];
+
+  for (const [pattern, points] of rewards) {
+    if (pattern.test(lower)) {
+      score += points;
+    }
+  }
+
+  for (const [pattern, points] of penalties) {
+    if (pattern.test(lower)) {
+      score -= points;
+    }
+  }
+
+  return score;
+}
+
+function parseHistoricalYear(year: number | string): number {
+  const parsed = Number(year);
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
 }
 
 function padDatePart(value: number): string {
@@ -417,6 +561,50 @@ const CURATED_NUMBER_FACTS: Record<string, Partial<Record<"math" | "trivia", str
     math: "1 is the multiplicative identity. Multiply by it and the number survives untouched.",
     trivia: "The loneliest number also runs the whole counting system; every tally starts by trusting one mark.",
   },
+  "2": {
+    math: "2 is the only even prime. Every other even number already gave itself a divisor.",
+    trivia: "2 is the first number that can make a pair, a choice, an argument, or a mirror.",
+  },
+  "3": {
+    math: "3 is the first odd prime and the first number that can close a triangle.",
+    trivia: "Three sticks because people like beginnings, middles, and endings more than clean data.",
+  },
+  "4": {
+    math: "4 is the first square after 1: two by two, the smallest real grid.",
+    trivia: "Four corners make a room feel settled; that is design psychology wearing arithmetic.",
+  },
+  "5": {
+    math: "5 is prime, and base ten treats it like a hinge because it sits halfway to 10.",
+    trivia: "Five fingers made 5 feel natural long before notation got involved.",
+  },
+  "6": {
+    math: "6 is the first perfect number: 1 + 2 + 3 gives 6 back exactly.",
+    trivia: "Six sneaks into dice, insects, snowflakes, and hexagons because symmetry likes it.",
+  },
+  "7": {
+    math: "7 is prime and cannot tile a regular pattern in the plane; it resists the grid.",
+    trivia: "7 carried luck through dice, planets, and ritual counts until it became shorthand for fate.",
+  },
+  "8": {
+    math: "8 is 2 cubed. It is the first cube that feels like a block you can hold.",
+    trivia: "Turn 8 sideways and it becomes infinity; typography did half the mythology.",
+  },
+  "9": {
+    math: "9 is 3 squared, and its multiples keep collapsing back to 9 under digit sums.",
+    trivia: "Nine sounds final because it stands one step before the decimal system rolls over.",
+  },
+  "10": {
+    math: "10 is 2 x 5, but its power mostly comes from fingers and place value.",
+    trivia: "10 feels complete because our hands trained the counting system.",
+  },
+  "11": {
+    math: "11 is prime, and two matching digits make it look less sharp than it is.",
+    trivia: "11:11 became a wish ritual because clocks accidentally invented a tiny shrine.",
+  },
+  "12": {
+    math: "12 has too many useful divisors to stay quiet: halves, thirds, quarters, and sixths all fit.",
+    trivia: "Twelve runs clocks, months, eggs, juries, and old trade because it divides neatly.",
+  },
   "13": {
     math: "13 is prime, but it also starts a Fibonacci-adjacent run where superstition keeps doing the marketing.",
     trivia: "Buildings skip the 13th floor more often than math skips 13. The number did nothing wrong.",
@@ -440,6 +628,10 @@ const CURATED_NUMBER_FACTS: Record<string, Partial<Record<"math" | "trivia", str
   "108": {
     math: "108 is divisible by 1, 2, 3, 4, 6, 9, 12, 18, 27, 36, 54, and 108. It travels with a large entourage.",
     trivia: "108 shows up in prayer beads, temple counts, and astronomy lore; it picked up ritual weight by repetition.",
+  },
+  "314": {
+    math: "314 is 100 x pi rounded down to an integer; the decimal point moved, but the circle is still there.",
+    trivia: "314 became Pi Day shorthand anywhere the calendar writes March 14 as 3/14.",
   },
   "1729": {
     math: "1729 is the Hardy-Ramanujan taxicab number: 1^3 + 12^3 and 9^3 + 10^3 land on the same value.",
